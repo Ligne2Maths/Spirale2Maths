@@ -650,7 +650,7 @@ function renderSFCard(acronyme, sf) {
       const vwrap = document.createElement("div");
       vwrap.className = "video-wrap";
       const iframe = document.createElement("iframe");
-      iframe.src = `https://www.youtube.com/embed/${sf.niveaux[n]}`;
+      iframe.src = `https://www.youtube-nocookie.com/embed/${sf.niveaux[n]}`;
       iframe.title = `${sf.code} - Niveau ${n}`;
       iframe.allow =
         "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
