@@ -56,32 +56,32 @@ function addDays(date, delta) {
 function loadPersistedGlobalState(availableAcronymes) {
   let savedSel = null;
   try {
-    savedSel = JSON.parse(localStorage.getItem("revisionSite_selectedNiveaux") || "null");
+    savedSel = JSON.parse(localStorage.getItem("carnet2maths_selectedNiveaux") || "null");
   } catch (e) { /* valeur corrompue, on ignore */ }
 
   const valid = Array.isArray(savedSel) ? savedSel.filter((a) => availableAcronymes.includes(a)) : [];
   state.selectedAcronymes = new Set(valid.length ? valid : availableAcronymes);
 
-  const savedMode = localStorage.getItem("revisionSite_mode");
+  const savedMode = localStorage.getItem("carnet2maths_mode");
   state.mode = savedMode === "chapitre" || savedMode === "date" ? savedMode : "date";
 
   try {
-    state.validations = JSON.parse(localStorage.getItem("revisionSite_validations") || "{}");
+    state.validations = JSON.parse(localStorage.getItem("carnet2maths_validations") || "{}");
   } catch (e) {
     state.validations = {};
   }
 }
 
 function saveSelectedNiveaux() {
-  localStorage.setItem("revisionSite_selectedNiveaux", JSON.stringify([...state.selectedAcronymes]));
+  localStorage.setItem("carnet2maths_selectedNiveaux", JSON.stringify([...state.selectedAcronymes]));
 }
 
 function saveMode() {
-  localStorage.setItem("revisionSite_mode", state.mode);
+  localStorage.setItem("carnet2maths_mode", state.mode);
 }
 
 function saveValidations() {
-  localStorage.setItem("revisionSite_validations", JSON.stringify(state.validations));
+  localStorage.setItem("carnet2maths_validations", JSON.stringify(state.validations));
 }
 
 function getValidationEntry(acronyme, code, n) {
