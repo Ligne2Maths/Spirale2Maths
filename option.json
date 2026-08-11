@@ -1,0 +1,24 @@
+{
+  "niveaux": [
+    {
+      "acronyme": "Terminale",
+      "ordre": 2,
+      "fichier": "contenu/Terminale.xlsx",
+      "chapitres": {
+        "1": "Multiplication",
+        "2": "Division",
+        "3": "Les deux :O"
+      }
+    },
+    {
+      "acronyme": "Révision Première",
+      "ordre": 1,
+      "fichier": "contenu/Premiere.xlsx",
+      "chapitres": {
+        "1": "Mu",
+        "2": "Di",
+        "3": "Le"
+      }
+    }
+  ]
+}

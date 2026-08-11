@@ -1,0 +1,607 @@
+:root {
+  --color-bg: #f4f5fb;
+  --color-surface: #ffffff;
+  --color-border: #e3e5f2;
+  --color-text: #1e2233;
+  --color-text-muted: #6b7085;
+  --color-accent: #4f46e5;
+  --color-accent-dark: #4338ca;
+  --color-accent-soft: #eef0ff;
+  --color-valid: #16a34a;
+  --color-valid-bg: #e7f9ee;
+  --color-invalid: #e11d48;
+  --color-invalid-bg: #fdecef;
+  --color-valid-darker: #14532d;
+  --color-neutral-bg: #e9eaef;
+  --color-gray-light: #c2c6d6;
+  --radius: 14px;
+  --radius-sm: 10px;
+  --shadow-sm: 0 1px 2px rgba(30, 34, 51, 0.06), 0 1px 3px rgba(30, 34, 51, 0.05);
+  --shadow-md: 0 8px 20px rgba(30, 34, 51, 0.1);
+  --transition: 0.15s ease;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+/* Évite que Chrome Android interprète des taps rapprochés (ouvrir puis
+   valider/rater juste après) comme un double-tap de zoom, ce qui empêchait
+   certains boutons de répondre au toucher. */
+button,
+.date-item.adjacent {
+  touch-action: manipulation;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  background: var(--color-bg);
+  color: var(--color-text);
+  line-height: 1.45;
+}
+
+/* ---------- En-tête ---------- */
+
+.site-header {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+  padding: 0.7rem 1rem 0.85rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.site-title {
+  margin: 0;
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  background: linear-gradient(135deg, var(--color-accent), #8b7ff5);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+.header-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  font-size: 0.95rem;
+}
+
+.header-row-label {
+  font-weight: 600;
+  color: var(--color-text-muted);
+  margin-right: 0.2rem;
+  font-size: 0.85rem;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.checkbox-group,
+.header-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+}
+
+.checkbox-item,
+.radio-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  cursor: pointer;
+  user-select: none;
+}
+
+.toggle-btn {
+  padding: 0.4rem 1rem;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition), color var(--transition),
+    transform var(--transition), box-shadow var(--transition);
+}
+
+.toggle-btn:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent-dark);
+}
+
+.toggle-btn:active {
+  transform: scale(0.96);
+}
+
+.toggle-btn.active {
+  background: var(--color-accent);
+  border-color: var(--color-accent-dark);
+  color: #fff;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Contrôle segmenté (bascule Par Chapitre / Par Date) : un seul actif à la fois,
+   avec une pastille violette qui glisse sous le libellé actif. */
+
+.segmented {
+  position: relative;
+  display: inline-flex;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  padding: 3px;
+  gap: 2px;
+}
+
+.segment-indicator {
+  position: absolute;
+  top: 3px;
+  left: 0;
+  height: calc(100% - 6px);
+  width: 0;
+  background: var(--color-accent);
+  border-radius: 999px;
+  box-shadow: var(--shadow-sm);
+  transition: transform 0.28s ease, width 0.28s ease;
+}
+
+.segment-btn {
+  position: relative;
+  z-index: 1;
+  border: none;
+  background: transparent;
+  padding: 0.45rem 1.1rem;
+  border-radius: 999px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  color: var(--color-text-muted);
+  cursor: pointer;
+  transition: color var(--transition);
+}
+
+.segment-btn:hover {
+  color: var(--color-accent-dark);
+}
+
+.segment-btn.active {
+  color: #fff;
+}
+
+/* ---------- Contenu principal ---------- */
+
+main#app {
+  max-width: 900px;
+  margin: 0 auto;
+  padding: 1.25rem 1rem 3rem;
+}
+
+.empty-message {
+  color: var(--color-text-muted);
+  font-style: italic;
+  padding: 1rem 0;
+}
+
+.niveau-section + .niveau-section {
+  margin-top: 2rem;
+  padding-top: 1.75rem;
+  border-top: 2px dashed var(--color-border);
+}
+
+.niveau-heading {
+  margin: 0 0 0.9rem;
+  font-size: 1.2rem;
+  font-weight: 800;
+  color: var(--color-accent-dark);
+}
+
+/* Sous-titres de regroupement par chapitre en mode Par Date */
+
+.chapitre-groupe-heading {
+  margin: 1.5rem 0 0.6rem;
+  padding-top: 1rem;
+  border-top: 1px dashed var(--color-border);
+  font-size: 0.8rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
+}
+
+.chapitre-groupe-heading:first-of-type {
+  margin-top: 0;
+  padding-top: 0;
+  border-top: none;
+}
+
+/* ---------- Mode Chapitre ---------- */
+
+.chapitre {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  margin-bottom: 0.85rem;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--transition);
+}
+
+.chapitre:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.chapitre > summary {
+  cursor: pointer;
+  padding: 0.9rem 1.1rem;
+  font-weight: 700;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: background var(--transition);
+}
+
+.chapitre > summary:hover {
+  background: var(--color-accent-soft);
+}
+
+.chapitre > summary::-webkit-details-marker {
+  display: none;
+}
+
+.chapitre > summary::after {
+  content: "▸";
+  color: var(--color-accent);
+  font-size: 1.1rem;
+  transition: transform 0.2s ease;
+}
+
+.chapitre[open] > summary::after {
+  transform: rotate(90deg);
+}
+
+.chapitre-body {
+  padding: 0.25rem 1.1rem 1.1rem;
+  border-top: 1px solid var(--color-border);
+}
+
+/* ---------- Mode Date ---------- */
+
+.date-nav {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 0.5rem 0 1.25rem;
+  overflow-x: auto;
+}
+
+.date-nav-arrow {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: 50%;
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 auto;
+  font-size: 1rem;
+  cursor: pointer;
+  color: var(--color-accent-dark);
+  box-shadow: var(--shadow-sm);
+  transition: background var(--transition), transform var(--transition);
+}
+
+.date-nav-arrow:hover {
+  background: var(--color-accent-soft);
+}
+
+.date-nav-arrow:active {
+  transform: scale(0.92);
+}
+
+.date-item {
+  flex: 0 0 auto;
+  font-weight: 700;
+  padding: 0.4rem 0.75rem;
+  border-radius: 999px;
+  white-space: nowrap;
+  transition: background var(--transition), color var(--transition);
+}
+
+.date-item.adjacent {
+  color: var(--color-gray-light);
+  font-weight: 600;
+  cursor: pointer;
+  background: none;
+}
+
+.date-item.adjacent:hover {
+  color: var(--color-accent-dark);
+  background: var(--color-accent-soft);
+}
+
+.date-item.current {
+  color: #fff;
+  background: linear-gradient(135deg, var(--color-accent), var(--color-accent-dark));
+  font-size: 1.1rem;
+  box-shadow: var(--shadow-sm);
+}
+
+/* Repère visuel du jour actuel de la machine, distinct de la date affichée
+   (qui peut être différente une fois qu'on a navigué). */
+.date-item.is-today {
+  text-decoration: underline;
+  text-decoration-color: currentColor;
+  text-decoration-thickness: 2.5px;
+  text-underline-offset: 3px;
+}
+
+.btn-clear-day {
+  display: block;
+  margin: 2rem auto 0;
+  padding: 0.6rem 1.2rem;
+  border: 1px solid var(--color-invalid);
+  border-radius: 999px;
+  background: var(--color-surface);
+  color: var(--color-invalid);
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition), transform var(--transition);
+}
+
+.btn-clear-day:hover {
+  background: var(--color-invalid);
+  color: #fff;
+}
+
+.btn-clear-day:active {
+  transform: scale(0.96);
+}
+
+/* ---------- Carte SF ---------- */
+
+.sf-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  padding: 1rem 1.1rem;
+  margin-bottom: 0.85rem;
+  box-shadow: var(--shadow-sm);
+  transition: box-shadow var(--transition), transform var(--transition);
+}
+
+.sf-card:hover {
+  box-shadow: var(--shadow-md);
+  transform: translateY(-1px);
+}
+
+/* États de validation (mode Par Date) */
+
+.sf-card.stage-green {
+  background: var(--color-valid-bg);
+}
+
+.sf-card.stage-gray {
+  background: var(--color-neutral-bg);
+}
+
+.sf-card.stage-border-high {
+  border-color: var(--color-valid-darker);
+  border-width: 2px;
+}
+
+.chapitre-body .sf-card {
+  margin-top: 0.85rem;
+  margin-bottom: 0;
+}
+
+.chapitre-body .sf-card + .sf-card {
+  margin-top: 0.85rem;
+}
+
+.sf-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  font-weight: 700;
+  font-size: 1.02rem;
+  margin: 0 0 0.4rem;
+}
+
+.sf-check {
+  color: var(--color-valid);
+  font-weight: 700;
+}
+
+.sf-comment {
+  color: var(--color-text-muted);
+  margin: 0 0 0.7rem;
+  font-size: 0.92rem;
+}
+
+.niveau-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.niveau-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.niveau-control {
+  display: inline-flex;
+}
+
+.niveau-stats {
+  font-size: 0.8rem;
+  color: var(--color-text-muted);
+  white-space: nowrap;
+  background: var(--color-bg);
+  border-radius: 999px;
+  padding: 0.15rem 0.5rem;
+}
+
+.btn-niveau {
+  padding: 0.5rem 1rem;
+  min-height: 2.75rem;
+  display: inline-flex;
+  align-items: center;
+  border-radius: 999px;
+  border: 1px solid var(--color-border);
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition), color var(--transition),
+    transform var(--transition), box-shadow var(--transition);
+}
+
+.btn-niveau:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent-dark);
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-niveau:active {
+  transform: scale(0.96);
+}
+
+.btn-niveau.is-open {
+  background: var(--color-accent);
+  border-color: var(--color-accent-dark);
+  color: #fff;
+}
+
+.btn-niveau.is-validated {
+  background: var(--color-valid-bg);
+  border-color: var(--color-valid);
+  color: var(--color-valid);
+}
+
+.btn-niveau.is-invalidated {
+  background: var(--color-invalid-bg);
+  border-color: var(--color-invalid);
+  color: var(--color-invalid);
+}
+
+.btn-split {
+  display: inline-flex;
+  gap: 2px;
+  border-radius: 999px;
+  overflow: hidden;
+  box-shadow: var(--shadow-sm);
+}
+
+.btn-valider,
+.btn-fermer,
+.btn-invalider {
+  padding: 0.45rem 0.6rem;
+  min-width: 2.75rem;
+  min-height: 2.75rem;
+  border: none;
+  font-size: 1.05rem;
+  cursor: pointer;
+  color: #fff;
+  transition: background var(--transition), transform var(--transition);
+}
+
+.btn-valider:active,
+.btn-fermer:active,
+.btn-invalider:active {
+  transform: scale(0.94);
+}
+
+.btn-valider {
+  background: var(--color-valid);
+}
+
+.btn-valider:hover {
+  background: #0f7a37;
+}
+
+.btn-fermer {
+  background: var(--color-gray-light);
+  color: #33383f;
+}
+
+.btn-fermer:hover {
+  background: #9aa2af;
+}
+
+.btn-invalider {
+  background: var(--color-invalid);
+}
+
+.btn-invalider:hover {
+  background: #be123c;
+}
+
+/* ---------- Vidéos ---------- */
+
+/* La grille elle-même n'a d'espacement que si au moins une vidéo est ouverte,
+   sinon elle resterait invisible mais garderait un vide sous les boutons. */
+.video-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 0;
+  margin-top: 0;
+  transition: margin-top 0.28s ease;
+}
+
+.video-grid:has(.video-collapse) {
+  gap: 0.75rem;
+  margin-top: 0.85rem;
+}
+
+/* Ouverture/fermeture progressive de la vidéo (grille 0fr → 1fr animée),
+   pour éviter le saut brutal quand une vidéo apparaît ou disparaît. */
+.video-collapse {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.28s ease;
+}
+
+.video-collapse.is-open {
+  grid-template-rows: 1fr;
+}
+
+.video-collapse-inner {
+  overflow: hidden;
+  min-height: 0;
+}
+
+.video-wrap {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: var(--radius-sm);
+  overflow: hidden;
+  background: #000;
+  box-shadow: var(--shadow-md);
+}
+
+.video-wrap iframe {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+}
+
+@media (min-width: 700px) {
+  .video-grid {
+    grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  }
+}
