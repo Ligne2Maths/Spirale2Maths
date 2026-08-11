@@ -2,7 +2,7 @@
   "niveaux": [
     {
       "acronyme": "Terminale",
-      "ordre": 2,
+      "ordre": 4,
       "fichier": "contenu/Terminale.xlsx",
       "chapitres": {
         "1": "Multiplication",
@@ -12,12 +12,28 @@
     },
     {
       "acronyme": "Révision Première",
-      "ordre": 1,
+      "ordre": 3,
       "fichier": "contenu/Premiere.xlsx",
       "chapitres": {
         "1": "Mu",
         "2": "Di",
         "3": "Le"
+      }
+    },
+	{
+      "acronyme": "3e",
+      "ordre": 1,
+      "fichier": "contenu/Premiere.xlsx",
+      "chapitres": {
+        "1": "Multiplication"
+      }
+    },
+	{
+      "acronyme": "Seconde",
+      "ordre": 2,
+      "fichier": "contenu/Premiere.xlsx",
+      "chapitres": {
+        "1": "Multiplication"
       }
     }
   ]

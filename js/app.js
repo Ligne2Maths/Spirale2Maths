@@ -21,6 +21,7 @@ const state = {
   niveauxData: new Map(),   // acronyme -> { config, sfList, planning, chapitresList }
   selectedAcronymes: new Set(),
   mode: "date",
+  videoMode: "nopub",       // "ytb" (lecteur YouTube classique) | "nopub" (iframe Digiview, sans pub)
   validations: {},          // { acronyme: { code: { n: { dateISO: true|false } } } } — une entrée par date où le niveau a été fait
   selectedDate: startOfToday(),
   openLevels: new Map(),    // `${acronyme}::${code}::${n}` -> "open" | "split" (transitoire)
@@ -65,6 +66,9 @@ function loadPersistedGlobalState(availableAcronymes) {
   const savedMode = localStorage.getItem("carnet2maths_mode");
   state.mode = savedMode === "chapitre" || savedMode === "date" ? savedMode : "date";
 
+  const savedVideoMode = localStorage.getItem("carnet2maths_videoMode");
+  state.videoMode = savedVideoMode === "ytb" ? "ytb" : "nopub"; // "nopub" par défaut
+
   try {
     state.validations = JSON.parse(localStorage.getItem("carnet2maths_validations") || "{}");
   } catch (e) {
@@ -78,6 +82,10 @@ function saveSelectedNiveaux() {
 
 function saveMode() {
   localStorage.setItem("carnet2maths_mode", state.mode);
+}
+
+function saveVideoMode() {
+  localStorage.setItem("carnet2maths_videoMode", state.videoMode);
 }
 
 function saveValidations() {
@@ -140,16 +148,20 @@ function parseListe(rows) {
   const sfs = [];
   if (!rows.length) return sfs;
 
-  // Les colonnes de niveau ("Niveau N YT") et "Commentaire" sont repérées par
-  // leur intitulé dans la 1ère ligne plutôt qu'à une position fixe : le
-  // nombre de niveaux (et donc la position de Commentaire) peut changer d'un
-  // tableur à l'autre (ex. ajout d'un Niveau 4, 5…) sans casser la lecture.
+  // Les colonnes de niveau ("Niveau N YT", "Niveau N Fin") et "Commentaire"
+  // sont repérées par leur intitulé dans la 1ère ligne plutôt qu'à une
+  // position fixe : le nombre de niveaux (et donc la position de
+  // Commentaire) peut changer d'un tableur à l'autre (ex. ajout d'un
+  // Niveau 4, 5…) sans casser la lecture.
   const header = rows[0].map((h) => String(h ?? "").trim());
   const commentaireCol = header.findIndex((h) => /^commentaire$/i.test(h));
   const niveauCols = [];
+  const niveauFinCols = [];
   header.forEach((h, col) => {
-    const m = h.match(/^niveau\s*(\d+)\s*yt$/i);
-    if (m) niveauCols.push({ n: Number(m[1]), col });
+    const mYT = h.match(/^niveau\s*(\d+)\s*yt$/i);
+    if (mYT) niveauCols.push({ n: Number(mYT[1]), col });
+    const mFin = h.match(/^niveau\s*(\d+)\s*fin$/i);
+    if (mFin) niveauFinCols.push({ n: Number(mFin[1]), col });
   });
 
   for (let i = 1; i < rows.length; i++) {
@@ -169,7 +181,17 @@ function parseListe(rows) {
       if (id) niveaux[n] = id;
     });
 
-    sfs.push({ code, chapitre, numSF, titre, commentaire, niveaux });
+    // Colonne "Niveau N Fin" : un nombre, non utilisé pour l'instant
+    // (réservé pour une future fonctionnalité) mais déjà lu et stocké.
+    const niveauxFin = {};
+    niveauFinCols.forEach(({ n, col }) => {
+      const val = row[col];
+      if (val !== "" && val !== undefined && val !== null && !Number.isNaN(Number(val))) {
+        niveauxFin[n] = Number(val);
+      }
+    });
+
+    sfs.push({ code, chapitre, numSF, titre, commentaire, niveaux, niveauxFin });
   }
   return sfs;
 }
@@ -323,6 +345,40 @@ function renderModeToggle() {
       buttons.forEach((b) => b.classList.toggle("active", b === btn));
       moveIndicator(btn, true);
       render();
+    };
+  });
+
+  moveIndicator(container.querySelector(".segment-btn.active"), false);
+
+  window.addEventListener("resize", () => {
+    moveIndicator(container.querySelector(".segment-btn.active"), false);
+  });
+}
+
+function renderVideoModeToggle() {
+  const container = document.getElementById("video-mode-toggle");
+  const indicator = document.getElementById("video-mode-indicator");
+  const buttons = container.querySelectorAll(".segment-btn");
+
+  function moveIndicator(btn, animate) {
+    if (!animate) indicator.style.transition = "none";
+    indicator.style.width = `${btn.offsetWidth}px`;
+    indicator.style.transform = `translateX(${btn.offsetLeft}px)`;
+    if (!animate) {
+      void indicator.offsetHeight; // force le rendu immédiat avant de réactiver la transition
+      indicator.style.transition = "";
+    }
+  }
+
+  buttons.forEach((btn) => {
+    btn.classList.toggle("active", btn.dataset.videoMode === state.videoMode);
+    btn.onclick = () => {
+      if (state.videoMode === btn.dataset.videoMode) return; // déjà actif
+      state.videoMode = btn.dataset.videoMode;
+      saveVideoMode();
+      buttons.forEach((b) => b.classList.toggle("active", b === btn));
+      moveIndicator(btn, true);
+      render(); // reconstruit les vidéos déjà ouvertes avec le nouveau lecteur
     };
   });
 
@@ -650,13 +706,84 @@ function renderSFCard(acronyme, sf) {
       const vwrap = document.createElement("div");
       vwrap.className = "video-wrap";
       const iframe = document.createElement("iframe");
-      iframe.src = `https://www.youtube-nocookie.com/embed/${sf.niveaux[n]}`;
+      const videoId = sf.niveaux[n];
+
+      if (state.videoMode === "nopub") {
+        // Digiview (ladigitale.dev) : lecteur sans pub, sans suggestions ni marque YouTube.
+        // Le redimensionnement réel est géré en CSS (.video-wrap), largeur/hauteur ici ne
+        // fixent que la résolution interne du lecteur.
+        const vignette = encodeURIComponent(`https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`);
+        let src =
+          `https://ladigitale.dev/digiview/inc/video.php?videoId=${videoId}` +
+          `&vignette=${vignette}&debut=0`;
+        const duree = sf.niveauxFin && sf.niveauxFin[n];
+        if (duree) src += `&fin=${duree}`;
+        src += `&largeur=1920&hauteur=1080`;
+        iframe.src = src;
+        iframe.allow = "picture-in-picture; autoplay; fullscreen";
+      } else {
+        iframe.src = `https://www.youtube-nocookie.com/embed/${videoId}`;
+        iframe.allow =
+          "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
+      }
+
       iframe.title = `${sf.code} - Niveau ${n}`;
-      iframe.allow =
-        "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
+      iframe.frameBorder = "0";
       iframe.allowFullscreen = true;
       vwrap.appendChild(iframe);
+
+      if (state.videoMode === "nopub") {
+        // Avant lecture, Digiview laisse voir l'affiche native de YouTube, et
+        // celle-ci est zoomée : pour masquer l'interface YouTube, leur script
+        // agrandit l'iframe interne d'un montant FIXE (height: calc(100% +
+        // 460px); top: -230px). YouTube y dessine l'affiche en "cover", donc
+        // plus le lecteur est petit, plus ces 460px pèsent et plus l'image est
+        // rognée (lecteur de 468px de haut ici -> zoom x2). On superpose donc
+        // notre propre aperçu, aux bonnes proportions.
+        vwrap.appendChild(buildThumbOverlay(videoId, n));
+      }
+
       return vwrap;
+    }
+
+    function buildThumbOverlay(videoId, n) {
+      const overlay = document.createElement("button");
+      overlay.type = "button";
+      overlay.className = "video-thumb-overlay";
+      overlay.setAttribute("aria-label", `Afficher la vidéo - ${sf.code} Niveau ${n}`);
+
+      const img = document.createElement("img");
+      img.alt = "";
+      img.onerror = () => {
+        img.onerror = null;
+        img.src = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`; // toujours disponible, en 16:9
+      };
+      img.src = `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`; // meilleure qualité si dispo
+
+      const play = document.createElement("span");
+      play.className = "video-thumb-play";
+      // Triangle dessiné en CSS pur (voir .video-thumb-play::after), pas un
+      // caractère "▶" : son rendu dépend de la police/du système et n'est
+      // jamais exactement centré optiquement.
+      play.setAttribute("aria-hidden", "true");
+
+      overlay.append(img, play);
+
+      // L'aperçu reçoit lui-même le clic et se retire : il faut donc un clic
+      // de plus pour lancer la vidéo (bouton de lecture de Digiview en
+      // dessous). C'est volontaire — laisser le clic « traverser »
+      // (pointer-events: none) pour économiser ce clic a été essayé et casse
+      // dans deux cas :
+      //   - plusieurs vidéos ouvertes : le retrait de l'aperçu se détectait
+      //     via l'événement `blur` de la page, qui ne se déclenche plus une
+      //     fois le focus déjà passé dans une première iframe ;
+      //   - sur mobile : le clic arrive souvent avant que Digiview ait fini
+      //     d'initialiser son lecteur YouTube, et il est purement perdu.
+      // Ces deux états sont indétectables depuis l'extérieur (iframe d'un
+      // autre domaine), d'où ce retour à un clic explicite, toujours fiable.
+      overlay.addEventListener("click", () => overlay.remove());
+
+      return overlay;
     }
 
     function createCollapseElement() {
@@ -801,7 +928,93 @@ function renderSFCard(acronyme, sf) {
   return card;
 }
 
+/* ---------- Première visite : choix des niveaux ---------- */
+
+// Écran affiché tant que l'utilisateur n'a jamais choisi ses niveaux de
+// classe. Rien n'est coché au départ et "Commencer" reste désactivé tant
+// qu'aucun niveau n'est sélectionné.
+function renderOnboarding(container, onCommencer) {
+  container.innerHTML = "";
+
+  const card = document.createElement("div");
+  card.className = "onboarding";
+
+  const titre = document.createElement("h2");
+  titre.className = "onboarding-title";
+  titre.textContent = "Sélectionne les niveaux qui t'intéressent";
+  card.appendChild(titre);
+
+  const liste = document.createElement("div");
+  liste.className = "onboarding-list";
+
+  const btn = document.createElement("button");
+  btn.type = "button";
+  btn.className = "onboarding-start";
+  btn.textContent = "Commencer";
+  btn.disabled = true;
+
+  const choisis = new Set();
+
+  getSortedNiveaux().forEach((n) => {
+    const item = document.createElement("label");
+    item.className = "onboarding-item";
+
+    const cb = document.createElement("input");
+    cb.type = "checkbox";
+    cb.value = n.acronyme;
+    cb.addEventListener("change", () => {
+      if (cb.checked) choisis.add(n.acronyme);
+      else choisis.delete(n.acronyme);
+      item.classList.toggle("is-checked", cb.checked);
+      btn.disabled = choisis.size === 0;
+    });
+
+    const texte = document.createElement("span");
+    texte.textContent = n.acronyme;
+
+    item.append(cb, texte);
+    liste.appendChild(item);
+  });
+
+  card.appendChild(liste);
+
+  btn.addEventListener("click", () => {
+    if (!choisis.size) return;
+    onCommencer([...choisis]);
+  });
+  card.appendChild(btn);
+
+  container.appendChild(card);
+}
+
+// Les contrôles d'en-tête n'ont pas de sens pendant le choix initial, et
+// l'indicateur glissant des bascules se calcule mal sur un élément masqué :
+// on les affiche donc seulement une fois le choix fait.
+function setHeaderControlsVisible(visible) {
+  document.getElementById("mode-row").hidden = !visible;
+  document.getElementById("video-mode-toggle").hidden = !visible;
+}
+
 /* ---------- Démarrage ---------- */
+
+async function demarrer(appEl) {
+  renderNiveauToggles();
+  renderModeToggle();
+  renderVideoModeToggle();
+
+  const niveauRow = document.getElementById("niveau-row");
+  if (state.optionData.niveaux.length > 1) niveauRow.hidden = false;
+
+  appEl.innerHTML = '<p class="empty-message">Chargement…</p>';
+  try {
+    await Promise.all([...state.selectedAcronymes].map((a) => ensureNiveauLoaded(a)));
+  } catch (err) {
+    appEl.innerHTML = `<p class="empty-message">Erreur de chargement (${err.message}).</p>`;
+    return;
+  }
+
+  render();
+}
 
 async function boot() {
   const appEl = document.getElementById("app");
@@ -825,21 +1038,25 @@ async function boot() {
 
   loadPersistedGlobalState(acronymes);
 
-  renderNiveauToggles();
-  renderModeToggle();
+  // Première visite = aucun choix encore enregistré. On ne pose la question
+  // que s'il y a réellement plusieurs niveaux : avec un seul, le choix serait
+  // une case à cocher unique et obligatoire, donc inutile.
+  const premiereVisite = localStorage.getItem("carnet2maths_selectedNiveaux") === null;
 
-  const niveauRow = document.getElementById("niveau-row");
-  if (optionData.niveaux.length > 1) niveauRow.hidden = false;
-
-  appEl.innerHTML = '<p class="empty-message">Chargement…</p>';
-  try {
-    await Promise.all([...state.selectedAcronymes].map((a) => ensureNiveauLoaded(a)));
-  } catch (err) {
-    appEl.innerHTML = `<p class="empty-message">Erreur de chargement (${err.message}).</p>`;
+  if (premiereVisite && optionData.niveaux.length > 1) {
+    setHeaderControlsVisible(false);
+    renderOnboarding(appEl, (choisis) => {
+      state.selectedAcronymes = new Set(choisis);
+      saveSelectedNiveaux();
+      setHeaderControlsVisible(true);
+      demarrer(appEl);
+    });
     return;
   }
 
-  render();
+  if (premiereVisite) saveSelectedNiveaux(); // niveau unique : on l'enregistre sans rien demander
+
+  await demarrer(appEl);
 }
 
 boot();

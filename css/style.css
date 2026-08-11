@@ -25,6 +25,13 @@
   box-sizing: border-box;
 }
 
+/* L'attribut `hidden` du HTML vaut `display: none` dans la feuille de style
+   du navigateur, donc n'importe quelle règle de classe (ex. `.header-row {
+   display: flex }`) le neutralise. On lui redonne la priorité. */
+[hidden] {
+  display: none !important;
+}
+
 /* Évite que Chrome Android interprète des taps rapprochés (ouvrir puis
    valider/rater juste après) comme un double-tap de zoom, ce qui empêchait
    certains boutons de répondre au toucher. */
@@ -53,6 +60,13 @@ body {
   padding: 0.7rem 1rem 0.85rem;
   display: flex;
   flex-direction: column;
+  gap: 0.6rem;
+}
+
+.header-top-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   gap: 0.6rem;
 }
 
@@ -174,6 +188,92 @@ body {
 
 .segment-btn.active {
   color: #fff;
+}
+
+/* ---------- Écran de première visite ---------- */
+
+.onboarding {
+  max-width: 26rem;
+  margin: 2.5rem auto 0;
+  padding: 1.6rem 1.4rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+}
+
+.onboarding-title {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 800;
+  text-align: center;
+  color: var(--color-text);
+}
+
+.onboarding-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin: 1.3rem 0;
+}
+
+.onboarding-item {
+  display: flex;
+  align-items: center;
+  gap: 0.65rem;
+  padding: 0.7rem 0.9rem;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  font-weight: 600;
+  cursor: pointer;
+  user-select: none;
+  transition: background var(--transition), border-color var(--transition), color var(--transition);
+}
+
+.onboarding-item:hover {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+.onboarding-item.is-checked {
+  border-color: var(--color-accent);
+  background: var(--color-accent-soft);
+  color: var(--color-accent-dark);
+}
+
+.onboarding-item input {
+  width: 1.15rem;
+  height: 1.15rem;
+  flex: 0 0 auto;
+  accent-color: var(--color-accent);
+  cursor: pointer;
+}
+
+.onboarding-start {
+  display: block;
+  width: 100%;
+  padding: 0.75rem 1.2rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 0.98rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--transition), transform var(--transition);
+}
+
+.onboarding-start:hover:not(:disabled) {
+  background: var(--color-accent-dark);
+}
+
+.onboarding-start:active:not(:disabled) {
+  transform: scale(0.97);
+}
+
+.onboarding-start:disabled {
+  background: var(--color-gray-light);
+  cursor: not-allowed;
 }
 
 /* ---------- Contenu principal ---------- */
@@ -598,6 +698,72 @@ main#app {
   width: 100%;
   height: 100%;
   border: 0;
+}
+
+/* Aperçu Digiview (mode NO PUB) : recouvre le lecteur jusqu'au clic, pour
+   éviter que l'affiche native YouTube (zoomée par le décalage fixe de 460px
+   de Digiview) ne soit visible. L'aperçu reçoit le clic et se retire, puis le
+   bouton de lecture de Digiview prend le relais — voir buildThumbOverlay()
+   dans js/app.js pour pourquoi le clic ne doit pas « traverser ». */
+.video-thumb-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  padding: 0;
+  margin: 0;
+  background: #000;
+  cursor: pointer;
+}
+
+.video-thumb-overlay img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.video-thumb-play {
+  position: relative;
+  z-index: 1;
+  width: 4rem;
+  height: 4rem;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-accent);
+  box-shadow: var(--shadow-md);
+  transition: background var(--transition), transform var(--transition);
+}
+
+/* Triangle dessiné en CSS (technique des bordures) plutôt qu'un caractère
+   "▶" : un glyphe de police n'est jamais parfaitement centré dans sa boîte
+   (métriques qui varient selon la police/le système). Le triangle géométrique
+   pointe vers la droite ; un léger décalage (margin-left) compense le fait
+   que son centre de gravité est plus proche de la base (gauche) que de la
+   pointe, ce qui sinon le fait paraître décalé à gauche à l'œil. */
+.video-thumb-play::after {
+  content: "";
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 11px 0 11px 18px;
+  border-color: transparent transparent transparent #fff;
+  margin-left: 4px;
+}
+
+.video-thumb-overlay:hover .video-thumb-play {
+  background: var(--color-accent-dark);
+  transform: scale(1.08);
+}
+
+.video-thumb-overlay:active .video-thumb-play {
+  transform: scale(0.96);
 }
 
 @media (min-width: 700px) {

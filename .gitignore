@@ -2,3 +2,8 @@
 host.bat
 push.bat
 claude.md
+sandbox/
+tools/__pycache__
+
+# Fichiers de verrouillage crees par Excel quand un classeur est ouvert
+~$*

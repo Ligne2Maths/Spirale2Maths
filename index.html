@@ -12,7 +12,14 @@
 </head>
 <body>
 <header class="site-header">
-  <h1 class="site-title">📒 Carnet2Maths</h1>
+  <div class="header-top-row">
+    <h1 class="site-title">📒 Carnet2Maths</h1>
+    <div class="segmented" id="video-mode-toggle">
+      <span class="segment-indicator" id="video-mode-indicator"></span>
+      <button type="button" class="segment-btn" data-video-mode="ytb">YTB</button>
+      <button type="button" class="segment-btn" data-video-mode="nopub">NO PUB</button>
+    </div>
+  </div>
 
   <div class="header-row" id="niveau-row" hidden>
     <span class="header-row-label">Niveau de classe</span>
