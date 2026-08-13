@@ -543,6 +543,38 @@ main#app {
   display: inline-flex;
 }
 
+/* Délimitation discrète entre les niveaux 1-2 et les niveaux bonus (3+) :
+   trait vertical pointillé quand tous les boutons tiennent sur une ligne. */
+.niveau-separator {
+  align-self: stretch;
+  width: 0;
+  min-height: 1.75rem;
+  border-left: 2px dotted var(--color-gray-light);
+  margin: 0.1rem 0.15rem;
+}
+
+/* Quand les boutons ne tiennent pas sur une ligne (classe posée par le JS,
+   voir updateSeparatorsOrientation), le trait devient horizontal et pleine
+   largeur plutôt que de rester orphelin en bout de ligne. */
+/* La boîte occupe toute la ligne (c'est ce qui force le retour à la ligne des
+   niveaux bonus), mais le trait lui-même est peint par le pseudo-élément et
+   s'arrête au bout des boutons : --sep-width est la largeur réellement
+   occupée par les boutons, posée par le JS. */
+.niveau-separator.is-wrapped {
+  flex-basis: 100%;
+  width: auto;
+  min-height: 0;
+  border-left: 0;
+  margin: 0.15rem 0;
+}
+
+.niveau-separator.is-wrapped::before {
+  content: "";
+  display: block;
+  width: var(--sep-width, 100%);
+  border-top: 2px dotted var(--color-gray-light);
+}
+
 .niveau-stats {
   font-size: 0.8rem;
   color: var(--color-text-muted);

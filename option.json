@@ -5,9 +5,21 @@
       "ordre": 4,
       "fichier": "contenu/Terminale.xlsx",
       "chapitres": {
-        "1": "Multiplication",
-        "2": "Division",
-        "3": "Les deux :O"
+        "1": "Suites - Raisonnement par récurrence",
+        "2": "Vecteurs, droites et plans de l'espace",
+        "3": "Limites de suites",
+		"4": "Loi binomiale",
+		"5": "Limites de fonctions",
+		"6": "Complément de dérivation",
+		"7": "Logarithme népérien",
+		"8": "Orthogonalité et distances dans l'espace",
+		"9": "Représentation paramétrique de droites",
+		"10": "Primitives",
+		"11": "Intégration",
+		"12": "Fonction trigonométrique",
+		"13": "Equations différentielles",
+		"14": "Combinatoire et dénombrement",
+		"15": "Concentration et loi des grands nombres"		
       }
     },
     {

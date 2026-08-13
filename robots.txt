@@ -1,0 +1,7 @@
+User-agent: *
+Allow: /
+
+# Les classeurs sources ne doivent pas apparaitre dans les resultats de recherche
+Disallow: /contenu/
+
+Sitemap: https://carnet2maths.fr/sitemap.xml
