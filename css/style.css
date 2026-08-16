@@ -759,6 +759,13 @@ main#app {
   object-fit: cover;
 }
 
+/* Vignette au format de la vidéo (4/3) posée dans un cadre 16/9 : on l'inscrit
+   en entier, les bandes noires latérales qui apparaissent sont exactement
+   celles du lecteur en mode « tv » (voir buildThumbOverlay dans js/app.js). */
+.video-thumb-overlay img.est-ajustee {
+  object-fit: contain;
+}
+
 .video-thumb-play {
   position: relative;
   z-index: 1;

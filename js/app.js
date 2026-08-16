@@ -656,6 +656,161 @@ function renderDateMode(container) {
   container.appendChild(clearBtn);
 }
 
+/* ---------- Format d'image des vidéos (16/9, 4/3, carré, vertical) ---------- */
+
+// Digiview masque l'habillage YouTube en agrandissant son iframe interne d'un
+// montant FIXE (top: -230px; height: calc(100% + 460px)) dans un gabarit figé
+// en 16/9. YouTube centrant la vidéo dans le lecteur, ce débord tombe pile sur
+// les zones vides d'une vidéo 16/9 et ne rogne rien ; mais une vidéo tournée en
+// 4/3 est plus haute à largeur égale, et perd alors 12,5 % en haut et 12,5 % en
+// bas. Leur video.php prévoit d'autres gabarits, choisis d'après le rapport des
+// paramètres largeur/hauteur de l'URL : en 4/3 (mode « tv ») il rétrécit son
+// iframe à 75 % de la largeur, et l'image passe entière, entre deux bandes
+// noires. D'où cette disjonction de cas, à partir du format réel de la vidéo.
+const GABARITS_DIGIVIEW = [
+  { seuil: 1.5, params: "largeur=1920&hauteur=1080" },  // 16/9 -> « large »
+  { seuil: 1.15, params: "largeur=1440&hauteur=1080" }, // 4/3  -> « tv »
+  { seuil: 0.95, params: "largeur=1080&hauteur=1080" }, // 1/1  -> « carre »
+  { seuil: 0, params: "largeur=1080&hauteur=1920" },    // 9/16 -> « vertical »
+];
+
+function gabaritDigiview(ratio) {
+  return GABARITS_DIGIVIEW.find((g) => ratio >= g.seuil).params;
+}
+
+// Formats réellement rencontrés sur YouTube : la détection choisit parmi eux.
+const RATIOS_VIDEO = [16 / 9, 4 / 3, 1, 9 / 16];
+
+const ratiosVideo = new Map(); // videoId -> ratio (miroir mémoire du localStorage)
+
+function ratioMemorise(videoId) {
+  if (ratiosVideo.has(videoId)) return ratiosVideo.get(videoId);
+  const stocke = Number(localStorage.getItem(`carnet2maths_ratio_${videoId}`));
+  if (stocke > 0) {
+    ratiosVideo.set(videoId, stocke);
+    return stocke;
+  }
+  return null;
+}
+
+function aimanterRatio(ratio) {
+  // Les valeurs mesurées ne tombent pas juste (l'oEmbed renvoie 200x113 pour du
+  // 16/9) : on retient le format théorique le plus proche.
+  return RATIOS_VIDEO.find((r) => Math.abs(ratio - r) / r < 0.05) || ratio;
+}
+
+// Source principale : l'oEmbed de YouTube donne les dimensions du lecteur
+// recommandé, qui suivent le format de la vidéo (200x150 en 4/3, 200x113 en
+// 16/9). Il sert des en-têtes CORS, donc lisible depuis le site.
+async function ratioParOembed(videoId) {
+  const reponse = await fetch(
+    "https://www.youtube.com/oembed?format=json&url=" +
+      encodeURIComponent(`https://www.youtube.com/watch?v=${videoId}`)
+  );
+  if (!reponse.ok) throw new Error(`oEmbed HTTP ${reponse.status}`);
+  const data = await reponse.json();
+  if (!data.width || !data.height) throw new Error("oEmbed sans dimensions");
+  return data.width / data.height;
+}
+
+// Secours si l'oEmbed est indisponible : la vignette hqdefault fait toujours
+// 480x360 (4/3) et YouTube y inscrit l'image d'origine en complétant avec des
+// bandes noires ; i.ytimg.com renvoie « Access-Control-Allow-Origin: * », on
+// peut donc les mesurer dans un canvas.
+// Piège : une bande mesurée n'est pas forcément une bande ajoutée — une image
+// simplement sombre sur un bord en produit une aussi (26 px mesurés sur une
+// vidéo 4/3 qui n'en a pourtant aucune). On ne déduit donc pas le format de la
+// mesure : on teste les formats plausibles, on écarte ceux dont les bandes
+// attendues sont plus grandes que les bandes mesurées (une vraie bande noire ne
+// peut pas être plus petite que prévu, seulement plus grande si l'image est
+// sombre), et on garde le plus proche.
+function ratioParVignette(videoId) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onerror = () => reject(new Error("vignette illisible"));
+    img.onload = () => {
+      try {
+        const canvas = document.createElement("canvas");
+        canvas.width = img.naturalWidth;
+        canvas.height = img.naturalHeight;
+        const ctx = canvas.getContext("2d", { willReadFrequently: true });
+        ctx.drawImage(img, 0, 0);
+        const { data, width, height } = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+        // Seuil à 24/255 : le JPEG délave le noir des bandes.
+        const estVide = (x, y) => {
+          const i = (y * width + x) * 4;
+          return data[i] < 24 && data[i + 1] < 24 && data[i + 2] < 24;
+        };
+        const ligneVide = (y) => {
+          for (let x = 0; x < width; x += 4) if (!estVide(x, y)) return false;
+          return true;
+        };
+        const colonneVide = (x) => {
+          for (let y = 0; y < height; y += 4) if (!estVide(x, y)) return false;
+          return true;
+        };
+
+        let haut = 0;
+        while (haut < height && ligneVide(haut)) haut++;
+        let bas = height - 1;
+        while (bas > haut && ligneVide(bas)) bas--;
+        let gauche = 0;
+        while (gauche < width && colonneVide(gauche)) gauche++;
+        let droite = width - 1;
+        while (droite > gauche && colonneVide(droite)) droite--;
+        if (droite - gauche < 40 || bas - haut < 40) throw new Error("vignette quasi noire");
+
+        const bandeHaute = Math.min(haut, height - 1 - bas);
+        const bandeLaterale = Math.min(gauche, width - 1 - droite);
+        const ratioVignette = width / height; // 4/3 pour hqdefault
+        const marge = 4;                      // tolérance de mesure
+
+        let choix = null;
+        let meilleurEcart = Infinity;
+        for (const candidat of RATIOS_VIDEO) {
+          const attendueHaute = candidat > ratioVignette ? (height - width / candidat) / 2 : 0;
+          const attendueLaterale = candidat < ratioVignette ? (width - height * candidat) / 2 : 0;
+          if (bandeHaute < attendueHaute - marge || bandeLaterale < attendueLaterale - marge) continue;
+          const ecart = bandeHaute - attendueHaute + (bandeLaterale - attendueLaterale);
+          if (ecart < meilleurEcart) {
+            meilleurEcart = ecart;
+            choix = candidat;
+          }
+        }
+        if (!choix) throw new Error("format non reconnu");
+        resolve(choix);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    img.src = `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`;
+  });
+}
+
+// Une seule détection par vidéo et par navigateur : le résultat est mémorisé.
+async function detecterRatio(videoId) {
+  const connu = ratioMemorise(videoId);
+  if (connu) return connu;
+
+  let ratio;
+  try {
+    ratio = aimanterRatio(await ratioParOembed(videoId));
+  } catch (_) {
+    try {
+      ratio = await ratioParVignette(videoId);
+    } catch (_) {
+      return 16 / 9; // format le plus courant, non mémorisé : on retentera
+    }
+  }
+  ratiosVideo.set(videoId, ratio);
+  try {
+    localStorage.setItem(`carnet2maths_ratio_${videoId}`, String(ratio));
+  } catch (_) { /* quota plein : on garde au moins le cache mémoire */ }
+  return ratio;
+}
+
 /* ---------- Rendu : carte Savoir-Faire ---------- */
 
 function renderSFCard(acronyme, sf) {
@@ -799,16 +954,27 @@ function renderSFCard(acronyme, sf) {
 
       if (state.videoMode === "nopub") {
         // Digiview (ladigitale.dev) : lecteur sans pub, sans suggestions ni marque YouTube.
-        // Le redimensionnement réel est géré en CSS (.video-wrap), largeur/hauteur ici ne
-        // fixent que la résolution interne du lecteur.
+        // Le redimensionnement réel est géré en CSS (.video-wrap) ; largeur/hauteur ne
+        // servent qu'à choisir le gabarit du lecteur (voir gabaritDigiview).
         const vignette = encodeURIComponent(`https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`);
         let src =
           `https://ladigitale.dev/digiview/inc/video.php?videoId=${videoId}` +
           `&vignette=${vignette}&debut=0`;
         const duree = sf.niveauxFin && sf.niveauxFin[n];
         if (duree) src += `&fin=${duree}`;
-        src += `&largeur=1920&hauteur=1080`;
-        iframe.src = src;
+
+        // Le format n'est connu tout de suite que s'il a déjà été détecté (il
+        // est ensuite mémorisé) ; sinon il faut une requête. L'aperçu recouvrant
+        // le lecteur jusqu'au clic, renseigner l'URL un instant plus tard ne se
+        // voit pas — alors qu'un chargement en 16/9 suivi d'une correction, si.
+        const ratioConnu = ratioMemorise(videoId);
+        if (ratioConnu) {
+          iframe.src = `${src}&${gabaritDigiview(ratioConnu)}`;
+        } else {
+          detecterRatio(videoId).then((ratio) => {
+            if (iframe.isConnected) iframe.src = `${src}&${gabaritDigiview(ratio)}`;
+          });
+        }
         iframe.allow = "picture-in-picture; autoplay; fullscreen";
       } else {
         iframe.src = `https://www.youtube-nocookie.com/embed/${videoId}`;
@@ -845,9 +1011,22 @@ function renderSFCard(acronyme, sf) {
       img.alt = "";
       img.onerror = () => {
         img.onerror = null;
-        img.src = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`; // toujours disponible, en 16:9
+        // Repli quand maxresdefault n'existe pas (fréquent sur les vidéos
+        // anciennes). Pour une vidéo 4/3, mqdefault est une version RECADRÉE en
+        // 16/9 : elle ne correspondrait pas au lecteur, qui affiche lui l'image
+        // entière entre deux bandes noires. On prend alors hqdefault, qui
+        // contient le cadre 4/3 complet, ajusté en "contain" pour reproduire
+        // ces bandes.
+        detecterRatio(videoId).then((ratio) => {
+          const large = ratio >= 1.5;
+          img.classList.toggle("est-ajustee", !large);
+          img.src = `https://i.ytimg.com/vi/${videoId}/${large ? "mqdefault" : "hqdefault"}.jpg`;
+        });
       };
-      img.src = `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`; // meilleure qualité si dispo
+      // maxresdefault est toujours un cadre 16/9, quel que soit le format de la
+      // vidéo (une 4/3 y est déjà entre deux bandes noires) : recadré en
+      // "cover", il reproduit exactement ce que montrera le lecteur.
+      img.src = `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
 
       const play = document.createElement("span");
       play.className = "video-thumb-play";
