@@ -761,6 +761,7 @@ main#app {
 }
 
 .niveau-item {
+  position: relative; /* repère de la pastille de compteurs */
   display: inline-flex;
   align-items: center;
   gap: 0.35rem;
@@ -770,17 +771,28 @@ main#app {
   display: inline-flex;
 }
 
+/* Compteurs de réussites / échecs, posés en pastille sur le coin haut-droit
+   du bouton. Hors flux : affichés à la suite du bouton, ils portaient
+   l'élément à ~158 px, et une carte SF imbriquée dans un chapitre n'offre que
+   ~270 px de large sur un écran de 375 px — il n'en tenait qu'un par ligne.
+   `flex` et non `inline-flex` : les deux compteurs sont deux éléments collés
+   dans le HTML, c'est le `gap` qui les sépare. */
 .niveau-stats {
-  /* inline-flex plutôt qu'un simple inline : les deux compteurs sont deux
-     éléments collés dans le HTML, c'est le `gap` qui les sépare. */
-  display: inline-flex;
-  gap: 0.3rem;
-  font-size: 0.8rem;
-  color: var(--color-text-muted);
-  white-space: nowrap;
-  background: var(--color-bg);
+  position: absolute;
+  top: -0.45rem;
+  right: 0;
+  z-index: 1;
+  display: flex;
+  gap: 0.2rem;
+  padding: 0 0.3rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
   border-radius: 999px;
-  padding: 0.15rem 0.5rem;
+  box-shadow: var(--shadow-sm);
+  color: var(--color-text-muted);
+  font-size: 0.7rem;
+  line-height: 1.6;
+  white-space: nowrap;
 }
 
 /* Réussites en vert, échecs en rouge : à cette taille, la couleur se lit avant
@@ -892,57 +904,26 @@ main#app {
   background: #b81f45;
 }
 
-/* ---------- Mode Chapitre sur téléphone : le badge passe en pastille --------
+/* ---------- Mode Chapitre : place réservée à la pastille ---------- */
+/* La zone des boutons ne réserve la place de la pastille qu'en mode Chapitre :
+   le mode Date n'a pas de compteurs (le bouton s'y scinde en ✔ ✕ ✖ pour noter
+   la séance), et ces écarts n'y seraient que du vide. */
+.chapitre-body .niveau-buttons {
+  /* Interligne élargi pour laisser passer la pastille, qui déborde de 0.45rem
+     au-dessus de son bouton. L'écart horizontal reste celui de base. */
+  row-gap: 0.7rem;
+  /* Même raison en haut de la zone : sans cette réserve la pastille de la
+     première rangée mordrait sur le titre du SF quand il n'y a pas de
+     commentaire. En padding et non en marge — une marge se serait fondue dans
+     celle du titre (fusion des marges verticales). */
+  padding-top: 0.5rem;
+}
 
-   Imbriquée dans le chapitre, une carte SF n'offre que ~270 px de large sur un
-   écran de 375 px (215 px sur un 320 px). Le badge de compteurs étant affiché
-   à la suite du bouton, un « bouton + badge » réclamait ~158 px : il n'en
-   tenait qu'un par ligne, et un SF à quatre niveaux occupait quatre rangées.
-
-   Le badge quitte donc le flux et se pose en pastille sur le coin haut-droit
-   du bouton. Chaque élément ne pèse plus alors que la largeur du bouton
-   (93 px), et le `flex-wrap` de `.niveau-buttons` en case de lui-même autant
-   que la carte peut en tenir : deux sur un écran de 375 px, trois dès ~400 px.
-
-   Uniquement en mode Chapitre (`.chapitre-body`) : en mode Date, il n'y a pas
-   de compteurs — le bouton s'y scinde en ✔ ✕ ✖ pour noter la séance. */
-@media (max-width: 30rem) {
-  .chapitre-body .niveau-buttons {
-    /* Interligne élargi pour laisser passer la pastille, qui déborde de
-       0.45rem au-dessus de son bouton. L'écart horizontal reste celui de
-       base. */
-    row-gap: 0.7rem;
-    /* Même raison en haut de la zone : sans cette réserve la pastille de la
-       première rangée mordrait sur le titre du SF quand il n'y a pas de
-       commentaire. En padding et non en marge — une marge se serait fondue
-       dans celle du titre (fusion des marges verticales). */
-    padding-top: 0.5rem;
-  }
-
-  /* Repère de la pastille. `.niveau-item` s'arrête au bord du bouton, c'est
-     donc bien sur SON coin qu'elle se cale. */
-  .chapitre-body .niveau-item {
-    position: relative;
-  }
-
-  .chapitre-body .btn-niveau {
-    white-space: nowrap;
-  }
-
-  .chapitre-body .niveau-stats {
-    position: absolute;
-    top: -0.45rem;
-    right: 0;
-    z-index: 1;
-    display: flex;
-    gap: 0.2rem;
-    padding: 0 0.3rem;
-    background: var(--color-surface);
-    border: 1px solid var(--color-border);
-    box-shadow: var(--shadow-sm);
-    font-size: 0.65rem;
-    line-height: 1.6;
-  }
+/* Le libellé ne doit pas se casser en deux lignes quand la carte est étroite :
+   les boutons se répartissent alors sur moins de colonnes, mais gardent leur
+   hauteur de 2.75rem. */
+.chapitre-body .btn-niveau {
+  white-space: nowrap;
 }
 
 /* En dessous de ~300 px (Galaxy Fold replié, 174 px utiles dans la carte),
