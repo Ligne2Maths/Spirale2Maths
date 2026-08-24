@@ -770,38 +770,6 @@ main#app {
   display: inline-flex;
 }
 
-/* Délimitation discrète entre les niveaux 1-2 et les niveaux bonus (3+) :
-   trait vertical pointillé quand tous les boutons tiennent sur une ligne. */
-.niveau-separator {
-  align-self: stretch;
-  width: 0;
-  min-height: 1.75rem;
-  border-left: 2px dotted var(--color-gray-light);
-  margin: 0.1rem 0.15rem;
-}
-
-/* Quand les boutons ne tiennent pas sur une ligne (classe posée par le JS,
-   voir updateSeparatorsOrientation), le trait devient horizontal et pleine
-   largeur plutôt que de rester orphelin en bout de ligne. */
-/* La boîte occupe toute la ligne (c'est ce qui force le retour à la ligne des
-   niveaux bonus), mais le trait lui-même est peint par le pseudo-élément et
-   s'arrête au bout des boutons : --sep-width est la largeur réellement
-   occupée par les boutons, posée par le JS. */
-.niveau-separator.is-wrapped {
-  flex-basis: 100%;
-  width: auto;
-  min-height: 0;
-  border-left: 0;
-  margin: 0.15rem 0;
-}
-
-.niveau-separator.is-wrapped::before {
-  content: "";
-  display: block;
-  width: var(--sep-width, 100%);
-  border-top: 2px dotted var(--color-gray-light);
-}
-
 .niveau-stats {
   /* inline-flex plutôt qu'un simple inline : les deux compteurs sont deux
      éléments collés dans le HTML, c'est le `gap` qui les sépare. */
@@ -928,8 +896,8 @@ main#app {
 
    Imbriquée dans le chapitre, une carte SF n'offre que ~270 px de large sur un
    écran de 375 px (215 px sur un 320 px). Un « bouton + badge » côte à côte en
-   réclame ~158 px : il n'en tenait qu'un par ligne, et un SF à quatre niveaux
-   occupait quatre rangées.
+   réclamait ~158 px : il n'en tenait qu'un par ligne, et un SF à quatre
+   niveaux occupait quatre rangées.
 
    On passe donc en grille de deux colonnes et le badge quitte le flux : il se
    pose en pastille sur le coin haut-droit du bouton, qui prend toute la
@@ -969,29 +937,6 @@ main#app {
     padding-left: 0.4rem;
     padding-right: 0.4rem;
     white-space: nowrap;
-  }
-
-  /* Le trait « niveaux 1-2 / bonus » occupe maintenant une rangée entière de la
-     grille. On réutilise tel quel le rendu horizontal écrit pour `.is-wrapped`
-     (trait peint par ::before) : updateSeparatorsOrientation() peut continuer à
-     poser la classe et --sep-width sans que le trait se dédouble. */
-  .chapitre-body .niveau-separator {
-    grid-column: 1 / -1;
-    width: auto;
-    min-height: 0;
-    border-left: 0;
-    margin: 0.15rem 0;
-  }
-
-  .chapitre-body .niveau-separator::before {
-    content: "";
-    display: block;
-    /* --sep-width est une valeur en pixels mesurée par le JS : `max-width`
-       la borne au cas où elle serait périmée (rotation de l'écran avant
-       remesure), plutôt que de laisser le trait déborder de la carte. */
-    width: var(--sep-width, 100%);
-    max-width: 100%;
-    border-top: 2px dotted var(--color-gray-light);
   }
 
   .chapitre-body .niveau-stats {

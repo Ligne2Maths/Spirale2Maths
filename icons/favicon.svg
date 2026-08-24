@@ -7,7 +7,8 @@
     </linearGradient>
   </defs>
   <rect width="512" height="512" fill="url(#c2m-bg)"/>
-  <g transform="rotate(-3 256 256)">
+  <!-- translate(0 -12) : recentrage optique — les anneaux pesent moins que la page, le bloc est remonte legerement -->
+  <g transform="translate(0 -12) rotate(-3 256 256)">
     <path d="M142 152h228a18 18 0 0 1 18 18v176l-56 56H142a18 18 0 0 1-18-18V170a18 18 0 0 1 18-18z" fill="#FFFFFF"/>
     <path d="M388 346l-56 56h38a18 18 0 0 0 18-18z" fill="#D6DBF7"/>
     <path d="M388 346l-56 56" stroke="#BEC5EE" stroke-width="3" fill="none"/>

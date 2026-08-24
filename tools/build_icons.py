@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-"""Publie le kit d'icones (dossier `icone/`) vers `icons/`, servi a la racine web,
-et regenere les images derivees (splash iOS, carte de partage).
+"""Regenere toute la charte graphique dans `icons/`, servi a la racine web :
+kit d'icones, favicon, ecrans de demarrage iOS et carte de partage.
 
-`icone/` reste la source de verite : c'est la que le kit est livre et regenere.
-`icons/` est ce que le navigateur telecharge, et contient en plus les ecrans de
-demarrage iOS, que le kit ne fournit pas (iOS exige un PNG par definition
-d'ecran, avec une media query exacte).
+`icons/icon-master.svg` est la source de verite du logo : le kit en est
+rasterise par `render_logo.py`. Si le dossier `icone/` est present (le kit tel
+qu'il a ete livre), ses PNG sont copies tels quels et priment sur le rendu.
+`icons/` contient en plus les ecrans de demarrage iOS, que le kit ne fournit
+pas (iOS exige un PNG par definition d'ecran, avec une media query exacte).
 
 Usage :  python tools/build_icons.py
 """
@@ -15,6 +16,8 @@ import os
 import shutil
 
 from PIL import Image, ImageDraw, ImageFilter, ImageFont
+
+import render_logo
 
 RACINE = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SOURCE = os.path.join(RACINE, "icone")
@@ -204,12 +207,18 @@ def main():
     if not os.path.isdir(CIBLE):
         os.makedirs(CIBLE)
 
-    print("Copie {} -> {}".format(SOURCE, CIBLE))
-    for nom in A_COPIER:
-        shutil.copy2(os.path.join(SOURCE, nom), os.path.join(CIBLE, nom))
-        print("  {}".format(nom))
+    if os.path.isdir(SOURCE):
+        print("Copie {} -> {}".format(SOURCE, CIBLE))
+        for nom in A_COPIER:
+            shutil.copy2(os.path.join(SOURCE, nom), os.path.join(CIBLE, nom))
+            print("  {}".format(nom))
+    else:
+        print("Rendu du kit depuis icons/icon-master.svg")
+        render_logo.generer_kit()
 
-    icone = arrondir(Image.open(os.path.join(SOURCE, "icon-512.png")))
+    # Le plus grand ecran de demarrage reclame une icone de 614 px : on part de
+    # la tuile 1024 du kit, l'icone 512 devrait etre agrandie.
+    icone = arrondir(Image.open(os.path.join(CIBLE, "splash-1024.png")))
 
     print("Ecrans de demarrage iOS")
     generer_splashs(icone)

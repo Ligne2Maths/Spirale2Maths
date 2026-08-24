@@ -662,84 +662,7 @@ function render() {
   } else {
     renderChapitreMode(appEl);
   }
-  updateSeparatorsOrientation();
 }
-
-/* ---------- Orientation du séparateur niveaux 1-2 / bonus ---------- */
-
-// Le trait pointillé est vertical tant que les boutons d'un SF tiennent sur
-// une seule ligne ; s'ils passent à la ligne, il devient horizontal (sinon il
-// resterait orphelin en bout de ligne) et sépare alors les niveaux 1-2 des
-// niveaux bonus, chacun sur leurs propres lignes. Le CSS seul ne sait pas
-// détecter un retour à la ligne : on compare les positions réelles des boutons.
-function updateSeparatorsOrientation() {
-  const separators = [...document.querySelectorAll(".niveau-separator")];
-  if (!separators.length) return;
-
-  // Les écritures (classes) et les lectures (positions) sont groupées par
-  // passes pour ne pas forcer un recalcul de mise en page à chaque séparateur.
-  separators.forEach((sep) => {
-    sep.classList.remove("is-wrapped");
-    sep.style.removeProperty("--sep-width");
-  });
-
-  const wrapped = separators.map((sep) => {
-    // Vertical seulement si TOUS les boutons du SF tiennent sur une ligne :
-    // les boutons remplissant les lignes dans l'ordre du DOM, il suffit de
-    // comparer le premier et le dernier.
-    const items = sep.parentElement.querySelectorAll(".niveau-item");
-    if (items.length < 2) return false;
-    const topFirst = items[0].getBoundingClientRect().top;
-    const topLast = items[items.length - 1].getBoundingClientRect().top;
-    return Math.abs(topFirst - topLast) > 1;
-  });
-
-  separators.forEach((sep, i) => sep.classList.toggle("is-wrapped", wrapped[i]));
-
-  // Le trait horizontal ne doit pas dépasser les boutons : on le limite à la
-  // largeur réellement occupée par la plus large des lignes de boutons (2
-  // boutons par ligne = trait de 2 boutons, pas toute la largeur de la carte).
-  // Mesuré après la pose de `is-wrapped`, donc sur la disposition finale.
-  separators.forEach((sep, i) => {
-    if (!wrapped[i]) return;
-    const width = widestButtonRow(sep.parentElement);
-    if (width) sep.style.setProperty("--sep-width", `${width}px`);
-  });
-}
-
-// Largeur de la ligne de boutons la plus large d'un SF : les boutons sont
-// regroupés par ligne d'affichage (même position verticale à 1px près).
-function widestButtonRow(buttonsWrap) {
-  const rows = [];
-  buttonsWrap.querySelectorAll(".niveau-item").forEach((item) => {
-    const r = item.getBoundingClientRect();
-    const row = rows.find((x) => Math.abs(x.top - r.top) <= 1);
-    if (row) {
-      row.left = Math.min(row.left, r.left);
-      row.right = Math.max(row.right, r.right);
-    } else {
-      rows.push({ top: r.top, left: r.left, right: r.right });
-    }
-  });
-  return rows.reduce((max, row) => Math.max(max, Math.round(row.right - row.left)), 0);
-}
-
-// Les cartes d'un chapitre replié sont en display:none : leurs boutons ne sont
-// mesurables qu'une fois le <details> ouvert. On remesure donc à l'ouverture,
-// et à chaque changement de largeur de fenêtre.
-document.addEventListener(
-  "toggle",
-  (e) => {
-    if (e.target instanceof HTMLDetailsElement && e.target.open) updateSeparatorsOrientation();
-  },
-  true // l'événement toggle ne remonte pas : capture obligatoire pour la délégation
-);
-
-let separatorsRaf = null;
-window.addEventListener("resize", () => {
-  if (separatorsRaf) cancelAnimationFrame(separatorsRaf);
-  separatorsRaf = requestAnimationFrame(updateSeparatorsOrientation);
-});
 
 function renderChapitreMode(container) {
   const acronymes = orderedSelectedAcronymes();
@@ -1096,7 +1019,6 @@ function renderDateMode(container) {
     state.selectedDate = date;
     state.openLevels.clear(); // change de jour = on repart avec toutes les vidéos fermées
     renderContenuDate(contenu);
-    updateSeparatorsOrientation();
   });
   container.appendChild(contenu);
 
@@ -1430,20 +1352,8 @@ function renderSFCard(acronyme, sf) {
   const videoGrid = document.createElement("div");
   videoGrid.className = "video-grid";
 
-  // Les niveaux 3+ sont des bonus : on marque une délimitation pointillée
-  // avant le premier d'entre eux (uniquement s'il y a aussi des niveaux 1-2).
-  const firstBonusLevel = displayedLevels.find((n) => n >= 3);
-  const hasBaseLevels = displayedLevels.some((n) => n <= 2);
-
   displayedLevels.forEach((n) => {
     const key = `${acronyme}::${sf.code}::${n}`;
-
-    if (hasBaseLevels && n === firstBonusLevel) {
-      const sep = document.createElement("span");
-      sep.className = "niveau-separator";
-      sep.setAttribute("aria-hidden", "true");
-      buttonsWrap.appendChild(sep);
-    }
 
     const item = document.createElement("span");
     item.className = "niveau-item";
