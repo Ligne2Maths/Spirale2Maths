@@ -12,7 +12,7 @@
 // Changer ce numéro invalide tous les anciens caches et déclenche la bannière
 // « nouvelle version » chez les visiteurs. À incrémenter à chaque déploiement
 // dont on veut être sûr qu'il parvienne immédiatement à tout le monde.
-const VERSION = "v6";
+const VERSION = "v11";
 
 const CACHE_COQUE = `carnet2maths-coque-${VERSION}`;
 const CACHE_DONNEES = `carnet2maths-donnees-${VERSION}`;
@@ -86,10 +86,24 @@ self.addEventListener("message", (event) => {
  * « cache d'abord » servirait indéfiniment l'ancienne version tant que le
  * numéro de VERSION n'a pas bougé. On préfère donc toujours interroger le
  * réseau, mais sans jamais bloquer l'affichage plus de DELAI_RESEAU_MS. */
+// « Réseau d'abord » n'a de sens que si le réseau est réellement interrogé :
+// sans consigne, fetch() peut répondre depuis le cache HTTP du navigateur, et
+// resservir un fichier périmé sans que la requête sorte de la machine.
+// `no-cache` laisse le navigateur garder sa copie, mais l'oblige à la faire
+// valider par le serveur — un 304 suffit, donc rien n'est retéléchargé pour
+// autant quand le fichier n'a pas bougé.
+function requeteFraiche(request) {
+  try {
+    return new Request(request, { cache: "no-cache" });
+  } catch (err) {
+    return request; // navigateur qui refuse la recopie : tant pis, sans consigne
+  }
+}
+
 async function reseauDabord(request, nomCache, delaiMs) {
   const cache = await caches.open(nomCache);
 
-  const reseau = fetch(request)
+  const reseau = fetch(requeteFraiche(request))
     .then((reponse) => {
       if (reponse && reponse.ok) cache.put(request, reponse.clone());
       return reponse;

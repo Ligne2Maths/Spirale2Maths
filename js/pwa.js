@@ -188,6 +188,7 @@
   window.addEventListener("appinstalled", () => {
     evenementInstall = null;
     retirerBanniere();
+    etiqueterRaccourciInstallation();
     try {
       localStorage.removeItem(CLE_INSTALL_REFUSEE);
     } catch (err) {
@@ -199,8 +200,11 @@
 
   // Safari n'implémente ni `beforeinstallprompt` ni aucune API d'installation :
   // la seule voie est le menu Partager. On décrit donc le geste.
-  function proposerInstallationIOS() {
-    if (estInstallee() || propositionRecemmentRefusee()) return;
+  // `forcee` : demande explicite de l'utilisateur (clic sur le logo). Elle
+  // passe outre le délai de trente jours — refuser la bannière ne doit pas
+  // condamner l'installation à quelqu'un qui la réclame ensuite.
+  function proposerInstallationIOS(forcee) {
+    if (estInstallee() || (!forcee && propositionRecemmentRefusee())) return;
 
     const texte = document.createElement("span");
     texte.className = "pwa-ios-steps";
@@ -236,8 +240,78 @@
   }
 
   if (estIOS() && estSafari() && !estInstallee()) {
-    setTimeout(proposerInstallationIOS, DELAI_AVANT_PROPOSITION_MS);
+    setTimeout(() => proposerInstallationIOS(false), DELAI_AVANT_PROPOSITION_MS);
   }
+
+  /* ---------- Raccourci : le logo propose l'installation ---------- */
+
+  // La bannière ne se montre qu'une fois par visite, et plus du tout pendant
+  // trente jours si elle a été fermée : sans autre point d'entrée, qui l'a
+  // écartée une fois ne peut plus installer l'application. Le logo tient ce
+  // rôle, et il répond TOUJOURS — un bouton qui ne réagit pas une fois sur
+  // deux, selon un état invisible du navigateur, passe pour cassé. Quand
+  // l'installation directe n'est pas possible, on dit au moins par où passer.
+  function proposerDepuisLogo() {
+    if (estInstallee()) {
+      afficherBanniere({
+        variante: "install",
+        titre: "Carnet2Maths est déjà installée",
+        texte: "Retrouvez-la sur votre écran d'accueil, elle s'ouvre sans navigateur et fonctionne hors connexion.",
+      });
+      return;
+    }
+
+    // Chrome, Edge, Android : l'invite native est disponible.
+    if (evenementInstall) {
+      proposerInstallation();
+      return;
+    }
+
+    // Safari sur iPhone et iPad : aucune API, seulement le menu Partager.
+    if (estIOS() && estSafari()) {
+      proposerInstallationIOS(true);
+      return;
+    }
+
+    // Le reste : Firefox, Safari sur Mac, ou Chrome qui n'a pas encore émis
+    // son événement. L'installation existe souvent quand même, mais elle ne
+    // se déclenche que depuis le menu du navigateur.
+    afficherBanniere({
+      variante: "install",
+      titre: "Installer Carnet2Maths",
+      texte:
+        "Dans le menu de votre navigateur, choisissez « Installer Carnet2Maths » " +
+        "ou « Ajouter à l'écran d'accueil ».",
+    });
+  }
+
+  function etiqueterRaccourciInstallation() {
+    const logo = document.querySelector(".site-logo");
+    if (!logo) return;
+    const libelle = estInstallee() ? "Application installée" : "Installer l'application";
+    logo.setAttribute("aria-label", libelle);
+    logo.title = libelle;
+  }
+
+  function activerRaccourciInstallation() {
+    const logo = document.querySelector(".site-logo");
+    if (!logo) return;
+
+    logo.setAttribute("role", "button");
+    logo.setAttribute("tabindex", "0");
+    etiqueterRaccourciInstallation();
+
+    logo.addEventListener("click", proposerDepuisLogo);
+    // Une <img> n'active rien au clavier de son propre chef : sans cela, le
+    // raccourci resterait réservé à la souris et au doigt.
+    logo.addEventListener("keydown", (e) => {
+      if (e.key !== "Enter" && e.key !== " ") return;
+      e.preventDefault();
+      proposerDepuisLogo();
+    });
+  }
+
+  activerRaccourciInstallation();
 
   /* ---------- Service worker ---------- */
 

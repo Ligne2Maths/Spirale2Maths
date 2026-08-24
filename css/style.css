@@ -86,6 +86,10 @@ body {
   gap: 0.6rem;
 }
 
+.site-header > * {
+  flex-shrink: 0;
+}
+
 .header-top-row {
   display: flex;
   align-items: center;
@@ -109,6 +113,22 @@ body {
      seul le carnet blanc se détacherait et les coins arrondis du logo
      disparaîtraient dans le fond. */
   box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.24), 0 2px 6px rgba(0, 0, 0, 0.28);
+}
+
+/* Le logo ne devient cliquable que si l'installation est réellement possible
+   (js/pwa.js pose alors role="button") : sinon il reste une simple image. */
+.site-logo[role="button"] {
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+
+.site-logo[role="button"]:active {
+  transform: scale(0.92);
+}
+
+.site-logo[role="button"]:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
 }
 
 .site-title {
@@ -142,15 +162,6 @@ body {
   display: flex;
   flex-wrap: wrap;
   gap: 0.6rem;
-}
-
-.header-row-inner {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  flex: 1 1 auto;
-  gap: 0.6rem;
-  min-width: 0;
 }
 
 .checkbox-item,
@@ -226,6 +237,7 @@ body {
   font-size: 0.88rem;
   font-weight: 600;
   color: var(--header-fg-muted);
+  white-space: nowrap;
   cursor: pointer;
   transition: color var(--transition);
 }
@@ -241,68 +253,71 @@ body {
 /* ---------- En-tête compact au défilement ---------- */
 
 /* Sur un écran de téléphone, l'en-tête collant mangeait près du tiers de la
-   hauteur utile. Dès que l'on descend dans la page, la rangée des niveaux de
-   classe se replie et l'en-tête se resserre : on ne choisit son niveau qu'en
-   arrivant, alors que la bascule Chapitre/Date et le choix du lecteur servent
-   en cours de lecture — eux restent. Remonter les fait réapparaître.
-   La classe est posée par surveillerDefilementPage() dans js/app.js ; elle ne
-   produit d'effet qu'ici, donc uniquement sur écran étroit. */
+   hauteur utile. Dès que l'on descend dans la page, il se réduit à une seule
+   ligne : le mode d'affichage à gauche, le choix du lecteur à droite. Le logo,
+   le titre, le libellé « Affichage » et la rangée des niveaux de classe
+   s'effacent — on les lit en arrivant, ils ne servent plus une fois la lecture
+   commencée. Remonter les fait revenir.
+
+   Le passage d'un état à l'autre est animé, mais pas d'ici : aucune transition
+   CSS ne sait interpoler entre une colonne de trois rangées et une grille d'une
+   seule ligne. C'est basculerEnTete() dans js/app.js qui mène le glissement,
+   en relevant la géométrie avant et après pour la rejouer.
+
+   La classe est posée par surveillerDefilementPage() ; elle ne produit d'effet
+   qu'ici, donc uniquement sur écran étroit. */
 @media (max-width: 700px) {
-  /* Toute durée touchée ici doit l'être aussi dans DUREE_REPLI_MS
-     (js/app.js) : c'est le temps pendant lequel le sens du geste ne se lit
-     plus dans la position de défilement. */
-  .site-header {
-    transition: padding 0.25s ease, gap 0.25s ease;
-  }
-
   .site-header.is-compact {
-    padding-top: calc(0.35rem + env(safe-area-inset-top));
-    padding-bottom: 0.4rem;
-    gap: 0.35rem;
-  }
-
-  /* La rangée du titre garde exactement sa largeur : rétrécir le logo ou le
-     titre rendrait quelques pixels à la bascule voisine, dont la pastille
-     glissante est positionnée en pixels par le JS et ne serait recalculée
-     qu'au prochain redimensionnement de la fenêtre. Elle resterait décalée du
-     libellé. C'est donc la hauteur, et elle seule, que l'on reprend. */
-
-  /* Repli animé jusqu'à la hauteur réelle de la rangée : une grille 1fr → 0fr
-     s'anime, là où `height: auto` ne s'anime pas et où un `max-height` fixe
-     obligerait à deviner la hauteur — variable, puisqu'elle dépend du nombre
-     de niveaux déclarés dans option.json. Même procédé que `.video-collapse`. */
-  #niveau-row {
     display: grid;
-    grid-template-rows: 1fr;
-    transition: grid-template-rows 0.25s ease, opacity 0.2s ease, margin-bottom 0.25s ease;
+    grid-template-columns: auto auto;
+    justify-content: space-between;
+    align-items: center;
+    /* La ligne reste en haut : pendant le glissement, l'en-tête est encore
+       haut de plusieurs rangées, et on veut voir les bascules à leur place
+       finale plutôt que flottant au milieu du vide. */
+    align-content: start;
+    column-gap: 0.35rem;
+    row-gap: 0;
+    padding: calc(0.4rem + env(safe-area-inset-top)) calc(0.6rem + env(safe-area-inset-right))
+      0.4rem calc(0.6rem + env(safe-area-inset-left));
   }
 
-  #niveau-row > .header-row-inner {
-    overflow: hidden;
-    min-height: 0;
+  /* Débarrassée du logo et du titre, la rangée du haut ne porte plus que la
+     bascule du lecteur : elle passe à droite de l'unique ligne. */
+  .site-header.is-compact .header-top-row {
+    grid-area: 1 / 2;
   }
 
+  .site-header.is-compact #mode-row {
+    grid-area: 1 / 1;
+  }
+
+  /* Ce que le repli fait disparaître. Le fondu, lui, est l'affaire du JS :
+     le temps du glissement, il les épingle à leur ancienne place pour qu'ils
+     s'effacent au lieu de s'évanouir d'un coup. */
+  .site-header.is-compact .site-brand,
+  .site-header.is-compact #mode-row .header-row-label,
   .site-header.is-compact #niveau-row {
-    grid-template-rows: 0fr;
-    opacity: 0;
-    /* La colonne flex réserve encore un espacement de part et d'autre de la
-       rangée repliée : celui-ci en annule un. */
-    margin-bottom: -0.35rem;
-    /* Retirée du parcours au clavier une fois repliée, sinon le focus filerait
-       sur des boutons invisibles. Masquée seulement au terme du repli, alors
-       qu'elle réapparaît sans délai. */
-    visibility: hidden;
-    transition: grid-template-rows 0.25s ease, opacity 0.2s ease, margin-bottom 0.25s ease,
-      visibility 0s 0.25s;
+    display: none;
+  }
+
+  /* À leur taille normale, les deux bascules réclament 336 px alors qu'un
+     écran de 375 px n'en offre que 335 : on resserre les libellés. Leur
+     pastille glissante est posée en pixels par le JS, qui la replace au moment
+     du basculement (repositionnerIndicateurs) — sans quoi elle garderait
+     l'ancienne largeur. */
+  .site-header.is-compact .segment-btn {
+    padding: 0.4rem 0.65rem;
+    font-size: 0.82rem;
   }
 }
 
-@media (prefers-reduced-motion: reduce) {
-  .site-header,
-  .site-logo,
-  .site-title,
-  #niveau-row {
-    transition: none;
+/* Les téléphones les plus étroits (jusqu'aux 320 px d'un iPhone SE de
+   première génération) réclament un cran de plus. */
+@media (max-width: 360px) {
+  .site-header.is-compact .segment-btn {
+    padding: 0.4rem 0.5rem;
+    font-size: 0.78rem;
   }
 }
 
@@ -788,12 +803,29 @@ main#app {
 }
 
 .niveau-stats {
+  /* inline-flex plutôt qu'un simple inline : les deux compteurs sont deux
+     éléments collés dans le HTML, c'est le `gap` qui les sépare. */
+  display: inline-flex;
+  gap: 0.3rem;
   font-size: 0.8rem;
   color: var(--color-text-muted);
   white-space: nowrap;
   background: var(--color-bg);
   border-radius: 999px;
   padding: 0.15rem 0.5rem;
+}
+
+/* Réussites en vert, échecs en rouge : à cette taille, la couleur se lit avant
+   le pictogramme. Les deux compteurs sont deux <span> distincts, posés par
+   updateStats() dans js/app.js. */
+.niveau-stats .stat-ok {
+  color: var(--color-valid);
+  font-weight: 700;
+}
+
+.niveau-stats .stat-ko {
+  color: var(--color-invalid);
+  font-weight: 700;
 }
 
 .btn-niveau {
@@ -890,6 +922,92 @@ main#app {
 
 .btn-invalider:hover {
   background: #b81f45;
+}
+
+/* ---------- Mode Chapitre sur téléphone : deux niveaux par ligne ----------
+
+   Imbriquée dans le chapitre, une carte SF n'offre que ~270 px de large sur un
+   écran de 375 px (215 px sur un 320 px). Un « bouton + badge » côte à côte en
+   réclame ~158 px : il n'en tenait qu'un par ligne, et un SF à quatre niveaux
+   occupait quatre rangées.
+
+   On passe donc en grille de deux colonnes et le badge quitte le flux : il se
+   pose en pastille sur le coin haut-droit du bouton, qui prend toute la
+   cellule. La carte y gagne près d'un tiers de hauteur.
+
+   Uniquement en mode Chapitre (`.chapitre-body`) : en mode Date le bouton peut
+   se scinder en trois (✔ ✕ ✖, 44 px chacun, soit 132 px), ce qui ne rentrerait
+   pas dans une colonne de 131 px. */
+@media (max-width: 30rem) {
+  .chapitre-body .niveau-buttons {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.7rem 0.45rem;
+    /* La pastille déborde de 0.45rem au-dessus du bouton : sans cette réserve
+       elle mordrait sur le titre du SF quand il n'y a pas de commentaire.
+       En padding et non en marge — une marge se serait fondue dans celle du
+       titre (fusion des marges verticales) et n'aurait presque rien ajouté. */
+    padding-top: 0.5rem;
+  }
+
+  /* `minmax(0, 1fr)` et `min-width: 0` vont ensemble : sans eux, la largeur
+     intrinsèque du bouton (« Niveau 1 » insécable) empêche la colonne de
+     descendre sous sa taille naturelle et la grille déborde de la carte. */
+  .chapitre-body .niveau-item {
+    position: relative; /* repère de la pastille de compteurs */
+    min-width: 0;
+  }
+
+  .chapitre-body .niveau-control {
+    min-width: 0;
+    flex: 1 1 auto;
+  }
+
+  .chapitre-body .btn-niveau {
+    width: 100%;
+    justify-content: center;
+    padding-left: 0.4rem;
+    padding-right: 0.4rem;
+    white-space: nowrap;
+  }
+
+  /* Le trait « niveaux 1-2 / bonus » occupe maintenant une rangée entière de la
+     grille. On réutilise tel quel le rendu horizontal écrit pour `.is-wrapped`
+     (trait peint par ::before) : updateSeparatorsOrientation() peut continuer à
+     poser la classe et --sep-width sans que le trait se dédouble. */
+  .chapitre-body .niveau-separator {
+    grid-column: 1 / -1;
+    width: auto;
+    min-height: 0;
+    border-left: 0;
+    margin: 0.15rem 0;
+  }
+
+  .chapitre-body .niveau-separator::before {
+    content: "";
+    display: block;
+    /* --sep-width est une valeur en pixels mesurée par le JS : `max-width`
+       la borne au cas où elle serait périmée (rotation de l'écran avant
+       remesure), plutôt que de laisser le trait déborder de la carte. */
+    width: var(--sep-width, 100%);
+    max-width: 100%;
+    border-top: 2px dotted var(--color-gray-light);
+  }
+
+  .chapitre-body .niveau-stats {
+    position: absolute;
+    top: -0.45rem;
+    right: 0;
+    z-index: 1;
+    display: flex;
+    gap: 0.2rem;
+    padding: 0 0.3rem;
+    background: var(--color-surface);
+    border: 1px solid var(--color-border);
+    box-shadow: var(--shadow-sm);
+    font-size: 0.65rem;
+    line-height: 1.6;
+  }
 }
 
 /* ---------- Vidéos ---------- */

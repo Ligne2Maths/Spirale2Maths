@@ -273,6 +273,19 @@ function orderedSelectedAcronymes() {
 
 /* ---------- Rendu : en-tête ---------- */
 
+// La pastille blanche qui glisse sous le libellé actif d'une bascule est posée
+// en pixels par le JS : elle doit être replacée dès que la géométrie change.
+// Chaque bascule dépose ici de quoi se recalculer — la fenêtre qu'on
+// redimensionne s'en sert, et l'en-tête compact aussi, lui qui resserre les
+// libellés en passant à une seule ligne.
+const repositionneursIndicateurs = [];
+
+function repositionnerIndicateurs() {
+  repositionneursIndicateurs.forEach((replacer) => replacer());
+}
+
+window.addEventListener("resize", repositionnerIndicateurs);
+
 function renderNiveauToggles() {
   const container = document.getElementById("niveau-toggles");
   container.innerHTML = "";
@@ -348,11 +361,27 @@ function renderModeToggle() {
     };
   });
 
-  moveIndicator(container.querySelector(".segment-btn.active"), false);
+  const replacer = () => {
+    const actif = container.querySelector(".segment-btn.active");
+    if (actif) moveIndicator(actif, false);
+  };
 
-  window.addEventListener("resize", () => {
-    moveIndicator(container.querySelector(".segment-btn.active"), false);
-  });
+  replacer();
+  repositionneursIndicateurs.push(replacer);
+}
+
+// Changement de lecteur (YTB <-> NO PUB) : tout reconstruire refermerait les
+// chapitres, remonterait la page en haut et recalerait la bande de dates. On ne
+// remplace donc que les lecteurs des vidéos actuellement dépliées, à leur place
+// exacte — le reste de la page n'est pas touché, donc rien ne bouge. Les
+// vidéos en cours de repli (classe `is-open` déjà retirée) sont ignorées :
+// elles vont disparaître, inutile d'y charger un lecteur.
+function rechargerLecteursOuverts() {
+  document
+    .querySelectorAll(".video-collapse.is-open > .video-collapse-inner")
+    .forEach((inner) => {
+      if (inner.rebatirLecteur) inner.rebatirLecteur();
+    });
 }
 
 function renderVideoModeToggle() {
@@ -378,87 +407,237 @@ function renderVideoModeToggle() {
       saveVideoMode();
       buttons.forEach((b) => b.classList.toggle("active", b === btn));
       moveIndicator(btn, true);
-      render(); // reconstruit les vidéos déjà ouvertes avec le nouveau lecteur
+      rechargerLecteursOuverts(); // échange les lecteurs sur place, sans rendu complet
     };
   });
 
-  moveIndicator(container.querySelector(".segment-btn.active"), false);
+  const replacer = () => {
+    const actif = container.querySelector(".segment-btn.active");
+    if (actif) moveIndicator(actif, false);
+  };
 
-  window.addEventListener("resize", () => {
-    moveIndicator(container.querySelector(".segment-btn.active"), false);
-  });
+  replacer();
+  repositionneursIndicateurs.push(replacer);
 }
 
 /* ---------- En-tête compact au défilement ---------- */
-
-// En deçà de ce défilement, l'en-tête reste déployé : se replier dès les
-// premiers pixels donnerait un sursaut au moindre frôlement du haut de page.
-const SEUIL_COMPACT_PX = 80;
 
 // Amplitude minimale d'un geste avant de changer d'état. Sans elle, un doigt
 // posé sur l'écran ferait osciller l'en-tête à chaque pixel.
 const AMPLITUDE_COMPACT_PX = 8;
 
+// Durée du glissement d'un état à l'autre.
+const DUREE_BASCULE_MS = 260;
+
 // Temps pendant lequel on cesse de lire la position de défilement après un
-// changement d'état, le temps que l'en-tête ait fini de changer de taille.
-// Doit couvrir la transition déclarée dans css/style.css (0,25 s), avec de la
-// marge pour un appareil qui peine.
-const DUREE_REPLI_MS = 350;
+// changement d'état. Il doit couvrir le glissement de bout en bout : tant que
+// la hauteur de l'en-tête bouge, le navigateur rattrape la position de
+// défilement, et cette position ne dit plus rien du geste de l'utilisateur.
+const DUREE_REPLI_MS = DUREE_BASCULE_MS + 100;
+
+// Animation en cours, s'il y en a une : de quoi la solder avant d'en lancer
+// une autre, sinon des styles en ligne resteraient posés.
+let animationEnTete = null;
+
+/** Fait passer l'en-tête d'un état à l'autre en animant le déplacement.
+ *
+ *  Aucune transition CSS ne sait interpoler entre les deux mises en page —
+ *  une colonne de trois rangées d'un côté, une grille d'une seule ligne de
+ *  l'autre. On relève donc la géométrie avant la bascule, on applique la
+ *  classe, on relève la géométrie d'arrivée, puis on ramène chaque élément à
+ *  sa position de départ par une transformation qu'on laisse ensuite se
+ *  résorber : le navigateur, lui, sait animer une transformation.
+ *
+ *  Les bascules segmentées glissent et changent d'échelle ; le logo, le
+ *  libellé « Affichage » et la rangée des niveaux, que le repli retire du
+ *  flux, s'effacent en fondu — épinglés le temps de l'animation là où ils
+ *  étaient, faute de quoi ils disparaîtraient d'un coup. */
+function basculerEnTete(header, versCompact) {
+  if (animationEnTete) animationEnTete.annuler();
+
+  const mouvants = [...header.querySelectorAll(".segmented")];
+  const fondus = [
+    header.querySelector(".site-brand"),
+    header.querySelector("#mode-row .header-row-label"),
+    header.querySelector("#niveau-row"),
+  ].filter((el) => el && !el.hidden);
+
+  const mesurer = (els) => new Map(els.map((el) => [el, el.getBoundingClientRect()]));
+
+  // Avant : géométrie de départ.
+  const hauteurAvant = header.getBoundingClientRect().height;
+  const avant = mesurer(mouvants);
+
+  // Au repli, les éléments qui s'effacent quittent le flux : leur place, il
+  // faut la relever pendant qu'ils l'occupent encore. Au dépliage ils la
+  // reprennent d'eux-mêmes, il n'y a qu'à les révéler.
+  const reperes = versCompact ? mesurer(fondus) : null;
+  const affichages = versCompact
+    ? new Map(fondus.map((el) => [el, getComputedStyle(el).display]))
+    : null;
+
+  // Après : la classe est posée, la mise en page d'arrivée est connue.
+  header.classList.toggle("is-compact", versCompact);
+  // Les libellés des bascules viennent de changer de taille : leur pastille
+  // resterait sur l'ancienne largeur.
+  repositionnerIndicateurs();
+
+  const apres = mesurer(mouvants);
+  const hauteurApres = header.getBoundingClientRect().height;
+
+  const aBouge =
+    Math.abs(hauteurAvant - hauteurApres) > 0.5 ||
+    mouvants.some((el) => {
+      const a = avant.get(el);
+      const b = apres.get(el);
+      return Math.abs(a.left - b.left) > 0.5 || Math.abs(a.top - b.top) > 0.5;
+    });
+
+  // Sur écran large, la classe ne change rien à voir : inutile d'animer le
+  // vide. De même si l'on demande moins d'animations.
+  if (!aBouge || window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  // Retour au point de départ, sans transition : à l'écran, rien n'a bougé.
+  const rectHeader = header.getBoundingClientRect();
+
+  header.style.overflow = "hidden";
+  header.style.height = `${hauteurAvant}px`;
+
+  mouvants.forEach((el) => {
+    const a = avant.get(el);
+    const b = apres.get(el);
+    el.style.transformOrigin = "left top";
+    el.style.transform =
+      `translate(${a.left - b.left}px, ${a.top - b.top}px) ` +
+      `scale(${a.width / b.width}, ${a.height / b.height})`;
+  });
+
+  fondus.forEach((el) => {
+    if (!versCompact) {
+      el.style.opacity = "0"; // en place, il ne reste qu'à le révéler
+      return;
+    }
+    const r = reperes.get(el);
+    el.style.display = affichages.get(el);
+    el.style.position = "absolute";
+    el.style.visibility = "visible";
+    el.style.left = `${r.left - rectHeader.left}px`;
+    el.style.top = `${r.top - rectHeader.top}px`;
+    el.style.width = `${r.width}px`;
+    el.style.opacity = "1";
+    el.style.pointerEvents = "none";
+  });
+
+  // Force la prise en compte de l'état de départ avant d'armer les transitions,
+  // sans quoi le navigateur peindrait directement l'état d'arrivée.
+  void header.offsetHeight;
+
+  header.style.transition = `height ${DUREE_BASCULE_MS}ms ease`;
+  header.style.height = `${hauteurApres}px`;
+
+  mouvants.forEach((el) => {
+    el.style.transition = `transform ${DUREE_BASCULE_MS}ms ease`;
+    el.style.transform = "";
+  });
+
+  // Le fondu est plus court que le glissement : ce qui s'en va doit avoir
+  // disparu avant que les bascules ne se posent.
+  const dureeFondu = Math.round(DUREE_BASCULE_MS * 0.6);
+  fondus.forEach((el) => {
+    el.style.transition = `opacity ${dureeFondu}ms ease`;
+    el.style.opacity = versCompact ? "0" : "1";
+  });
+
+  const nettoyer = () => {
+    header.style.transition = "";
+    header.style.height = "";
+    header.style.overflow = "";
+    mouvants.forEach((el) => {
+      el.style.transition = "";
+      el.style.transform = "";
+      el.style.transformOrigin = "";
+    });
+    fondus.forEach((el) => {
+      ["display", "position", "visibility", "left", "top", "width", "opacity",
+       "pointerEvents", "transition"].forEach((prop) => {
+        el.style[prop] = "";
+      });
+    });
+    animationEnTete = null;
+  };
+
+  // Minuterie plutôt que `transitionend` : cet événement ne se déclenche pas
+  // si l'onglet passe à l'arrière-plan en cours de route, et les styles en
+  // ligne resteraient posés.
+  const minuterie = setTimeout(nettoyer, DUREE_BASCULE_MS + 50);
+  animationEnTete = {
+    annuler: () => {
+      clearTimeout(minuterie);
+      nettoyer();
+    },
+  };
+}
 
 // Descendre replie l'en-tête, remonter le redéploie — et le haut de page le
 // redéploie toujours. Le repli lui-même est affaire de CSS, et n'a lieu que
-// sur écran étroit : ici on ne fait que poser la classe.
+// sur écran étroit : ici on ne fait que décider du basculement.
 function surveillerDefilementPage() {
   const header = document.querySelector(".site-header");
+  // Hauteur de l'en-tête déployé, relevée en continu : elle dépend du nombre
+  // de niveaux cochés et de la largeur de l'écran, on ne peut pas la figer.
+  let hauteurDeployee = header.getBoundingClientRect().height;
   let dernierY = Math.max(0, window.scrollY);
-  let derniereHauteur = header.getBoundingClientRect().height;
   let finDuRepli = 0;
   let enAttente = false;
 
   function evaluer() {
     enAttente = false;
-    const y = Math.max(0, window.scrollY);
-    const hauteur = header.getBoundingClientRect().height;
 
-    // L'en-tête occupe sa place dans le flux : en changeant de taille, il
-    // déplace tout ce qui le suit, et le navigateur rattrape alors la position
-    // de défilement pour garder l'image stable — c'est l'ancrage du
-    // défilement, auquel s'ajoute le recadrage quand on est en bas de page.
-    //
-    // Ces pixels-là ne viennent pas du doigt, et ils n'arrivent pas d'un coup :
-    // ils sont étalés sur toute la durée du repli, à raison d'un cran de
-    // hauteur par image — de l'ordre de l'amplitude qui nous sert justement à
-    // trancher. Les prendre pour un geste, c'est lire un mouvement vers le
-    // haut, redéployer, lire un mouvement vers le bas, replier : la barre se
-    // met à battre. Plutôt que de tenter de démêler geste et rattrapage image
-    // par image, on s'abstient de décider tant que l'en-tête bouge, en gardant
-    // seulement le repère à jour pour repartir juste à la fin.
-    if (performance.now() < finDuRepli) {
+    const compact = header.classList.contains("is-compact");
+    const hauteur = header.getBoundingClientRect().height;
+    const enTrainDeBouger = performance.now() < finDuRepli;
+
+    // Étalon relevé seulement à l'arrêt et en position déployée : mesuré en
+    // pleine animation, il ne voudrait rien dire.
+    if (!compact && !enTrainDeBouger) hauteurDeployee = hauteur;
+
+    // Position de défilement exprimée comme si l'en-tête était toujours
+    // déployé. L'en-tête occupe sa place dans le flux : en se repliant, il
+    // fait remonter tout ce qui le suit, et le navigateur rattrape alors la
+    // position pour garder l'image stable (ancrage du défilement, et recadrage
+    // en bas de page). `window.scrollY` bouge donc sans que le doigt ait bougé.
+    // Lui rajouter ce que l'en-tête a rendu donne une mesure que ses propres
+    // changements de taille ne font plus varier : ni le sens du geste, ni le
+    // seuil du haut de page ne s'y laissent prendre.
+    const y = Math.max(0, window.scrollY) + (hauteurDeployee - hauteur);
+
+    // Le rattrapage du navigateur et l'animation ne sont pas en phase : le
+    // temps que l'en-tête change de taille, la mesure ci-dessus reste décalée
+    // d'un cran d'animation. On suit donc sans rien décider, pour repartir
+    // d'un repère juste une fois l'en-tête stabilisé.
+    if (enTrainDeBouger) {
       dernierY = y;
-      derniereHauteur = hauteur;
       return;
     }
 
-    // Hors de cette fenêtre, la hauteur ne devrait plus bouger. Si elle bouge
-    // quand même — appareil lent, animation plus longue que prévu — la
-    // retrancher évite qu'un reste de rattrapage passe pour un geste.
-    const delta = y - dernierY + (derniereHauteur - hauteur);
-    const compact = header.classList.contains("is-compact");
+    // Tant qu'on n'a pas défilé au-delà de la hauteur de l'en-tête, il reste
+    // déployé. Le replier plus tôt rendrait plus de place que le défilement
+    // n'en a consommé : la page buterait sur son haut, et l'on se retrouverait
+    // en tête de page avec un en-tête réduit.
+    const delta = y - dernierY;
     let voulu = compact;
 
-    if (y <= SEUIL_COMPACT_PX) voulu = false;
+    if (y <= hauteurDeployee) voulu = false;
     else if (delta > AMPLITUDE_COMPACT_PX) voulu = true;
     else if (delta < -AMPLITUDE_COMPACT_PX) voulu = false;
-    // Geste trop court pour trancher : on garde l'état ET les points de
-    // repère, sinon une suite de micro-déplacements ne déclencherait jamais
-    // rien.
+    // Geste trop court pour trancher : on garde l'état ET le point de repère,
+    // sinon une suite de micro-déplacements ne déclencherait jamais rien.
     else return;
 
     dernierY = y;
-    derniereHauteur = hauteur;
 
     if (voulu === compact) return;
-    header.classList.toggle("is-compact", voulu);
+    basculerEnTete(header, voulu);
     finDuRepli = performance.now() + DUREE_REPLI_MS;
   }
 
@@ -1157,6 +1336,13 @@ async function detecterRatio(videoId) {
 
 /* ---------- Rendu : carte Savoir-Faire ---------- */
 
+function compteurStat(classe, texte) {
+  const el = document.createElement("span");
+  el.className = classe;
+  el.textContent = texte;
+  return el;
+}
+
 function renderSFCard(acronyme, sf) {
   const card = document.createElement("div");
   card.className = "sf-card";
@@ -1278,7 +1464,12 @@ function renderSFCard(acronyme, sf) {
       if (!statsBadge) return;
       const { vert, rouge } = countValidations(acronyme, sf.code, n);
       statsBadge.hidden = vert === 0 && rouge === 0;
-      statsBadge.textContent = `✔${vert} ✖${rouge}`;
+      // Deux éléments plutôt qu'une seule chaîne : le CSS colore les réussites
+      // en vert et les échecs en rouge (voir .niveau-stats .stat-ok/.stat-ko).
+      statsBadge.replaceChildren(
+        compteurStat("stat-ok", `✔${vert}`),
+        compteurStat("stat-ko", `✖${rouge}`)
+      );
     }
     updateStats();
 
@@ -1407,6 +1598,10 @@ function renderSFCard(acronyme, sf) {
       const inner = document.createElement("div");
       inner.className = "video-collapse-inner";
       inner.appendChild(buildVideo());
+      // Point d'entrée du changement de lecteur sans rendu complet
+      // (voir rechargerLecteursOuverts) : `buildVideo` lit `state.videoMode`
+      // au moment de l'appel, il suffit donc de rebâtir au même endroit.
+      inner.rebatirLecteur = () => inner.replaceChildren(buildVideo());
       collapse.appendChild(inner);
       return collapse;
     }
