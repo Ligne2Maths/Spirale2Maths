@@ -54,8 +54,7 @@
 /* Évite que Chrome Android interprète des taps rapprochés (ouvrir puis
    valider/rater juste après) comme un double-tap de zoom, ce qui empêchait
    certains boutons de répondre au toucher. */
-button,
-.date-item.adjacent {
+button {
   touch-action: manipulation;
 }
 
@@ -145,6 +144,15 @@ body {
   gap: 0.6rem;
 }
 
+.header-row-inner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  flex: 1 1 auto;
+  gap: 0.6rem;
+  min-width: 0;
+}
+
 .checkbox-item,
 .radio-item {
   display: inline-flex;
@@ -228,6 +236,74 @@ body {
 
 .segment-btn.active {
   color: var(--color-accent-dark);
+}
+
+/* ---------- En-tête compact au défilement ---------- */
+
+/* Sur un écran de téléphone, l'en-tête collant mangeait près du tiers de la
+   hauteur utile. Dès que l'on descend dans la page, la rangée des niveaux de
+   classe se replie et l'en-tête se resserre : on ne choisit son niveau qu'en
+   arrivant, alors que la bascule Chapitre/Date et le choix du lecteur servent
+   en cours de lecture — eux restent. Remonter les fait réapparaître.
+   La classe est posée par surveillerDefilementPage() dans js/app.js ; elle ne
+   produit d'effet qu'ici, donc uniquement sur écran étroit. */
+@media (max-width: 700px) {
+  /* Toute durée touchée ici doit l'être aussi dans DUREE_REPLI_MS
+     (js/app.js) : c'est le temps pendant lequel le sens du geste ne se lit
+     plus dans la position de défilement. */
+  .site-header {
+    transition: padding 0.25s ease, gap 0.25s ease;
+  }
+
+  .site-header.is-compact {
+    padding-top: calc(0.35rem + env(safe-area-inset-top));
+    padding-bottom: 0.4rem;
+    gap: 0.35rem;
+  }
+
+  /* La rangée du titre garde exactement sa largeur : rétrécir le logo ou le
+     titre rendrait quelques pixels à la bascule voisine, dont la pastille
+     glissante est positionnée en pixels par le JS et ne serait recalculée
+     qu'au prochain redimensionnement de la fenêtre. Elle resterait décalée du
+     libellé. C'est donc la hauteur, et elle seule, que l'on reprend. */
+
+  /* Repli animé jusqu'à la hauteur réelle de la rangée : une grille 1fr → 0fr
+     s'anime, là où `height: auto` ne s'anime pas et où un `max-height` fixe
+     obligerait à deviner la hauteur — variable, puisqu'elle dépend du nombre
+     de niveaux déclarés dans option.json. Même procédé que `.video-collapse`. */
+  #niveau-row {
+    display: grid;
+    grid-template-rows: 1fr;
+    transition: grid-template-rows 0.25s ease, opacity 0.2s ease, margin-bottom 0.25s ease;
+  }
+
+  #niveau-row > .header-row-inner {
+    overflow: hidden;
+    min-height: 0;
+  }
+
+  .site-header.is-compact #niveau-row {
+    grid-template-rows: 0fr;
+    opacity: 0;
+    /* La colonne flex réserve encore un espacement de part et d'autre de la
+       rangée repliée : celui-ci en annule un. */
+    margin-bottom: -0.35rem;
+    /* Retirée du parcours au clavier une fois repliée, sinon le focus filerait
+       sur des boutons invisibles. Masquée seulement au terme du repli, alors
+       qu'elle réapparaît sans délai. */
+    visibility: hidden;
+    transition: grid-template-rows 0.25s ease, opacity 0.2s ease, margin-bottom 0.25s ease,
+      visibility 0s 0.25s;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .site-header,
+  .site-logo,
+  .site-title,
+  #niveau-row {
+    transition: none;
+  }
 }
 
 /* ---------- Écran de première visite ---------- */
@@ -424,10 +500,11 @@ main#app {
 .date-nav {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 0.6rem;
+  gap: 0.2rem;
   padding: 0.5rem 0 1.25rem;
-  overflow-x: auto;
+  /* La bande file jusqu'aux bords de l'écran : un défilement qui s'arrête à
+     une marge blanche se lit comme une fin, alors qu'il n'y en a pas. */
+  margin-inline: -1rem;
 }
 
 .date-nav-arrow {
@@ -437,6 +514,7 @@ main#app {
   width: 2.25rem;
   height: 2.25rem;
   flex: 0 0 auto;
+  margin-inline: 0.35rem;
   font-size: 1rem;
   cursor: pointer;
   color: var(--color-accent-dark);
@@ -452,31 +530,77 @@ main#app {
   transform: scale(0.92);
 }
 
+/* Bande de jours défilante. Le JS n'en garde qu'une tranche en mémoire et la
+   régénère autour du jour affiché dès que le défilement s'arrête près d'un
+   bord — voir monterBandeDates() dans js/app.js. */
+.date-strip {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x mandatory;
+  /* Sans cela, arriver en butée déclenche le geste « page précédente » du
+     navigateur (Safari iOS, Chrome Android). */
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  /* Les jours s'effacent sur les bords plutôt que d'être coupés net : c'est ce
+     qui donne à la bande son air de rouleau sans fin. */
+  -webkit-mask-image: linear-gradient(to right, transparent, #000 15%, #000 85%, transparent);
+  mask-image: linear-gradient(to right, transparent, #000 15%, #000 85%, transparent);
+}
+
+.date-strip::-webkit-scrollbar {
+  display: none;
+}
+
+.date-strip:focus-visible {
+  outline: 2px solid var(--color-accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.date-strip-track {
+  display: flex;
+  align-items: center;
+  gap: 0.15rem;
+  width: max-content;
+  /* Laisse la place au grossissement du jour courant, qui déborderait sinon
+     de la zone de défilement. */
+  padding: 0.3rem 0;
+}
+
 .date-item {
   flex: 0 0 auto;
-  font-weight: 700;
-  padding: 0.4rem 0.75rem;
-  border-radius: 999px;
-  white-space: nowrap;
-  transition: background var(--transition), color var(--transition);
-}
-
-.date-item.adjacent {
-  color: var(--color-brand-faint);
-  font-weight: 600;
-  cursor: pointer;
+  scroll-snap-align: center;
+  position: relative;
+  /* Largeur figée : les points de calage restent régulièrement espacés, et le
+     jour courant peut grossir sans décaler ses voisins — d'où un `transform`
+     plutôt qu'une taille de police, qui, elle, referait la mise en page à
+     chaque date franchie. */
+  width: 4.75rem;
+  padding: 0.4rem 0.25rem 0.55rem;
+  border: none;
   background: none;
+  border-radius: 999px;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--color-brand-faint);
+  white-space: nowrap;
+  text-align: center;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition), transform var(--transition);
 }
 
-.date-item.adjacent:hover {
+.date-item:hover:not(.current) {
   color: var(--color-accent-dark);
-  background: var(--color-accent-soft);
 }
 
 .date-item.current {
   color: #fff;
   background: linear-gradient(135deg, var(--color-accent), var(--color-accent-dark));
-  font-size: 1.1rem;
+  transform: scale(1.08);
   box-shadow: var(--shadow-sm);
 }
 
@@ -487,6 +611,48 @@ main#app {
   text-decoration-color: currentColor;
   text-decoration-thickness: 2.5px;
   text-underline-offset: 3px;
+}
+
+/* Point sous les jours où au moins un niveau coché a des savoir-faire prévus :
+   sans lui, rien ne distinguerait les semaines pleines des semaines vides. */
+.date-item.has-content::after {
+  content: "";
+  position: absolute;
+  left: 50%;
+  bottom: 0.3rem;
+  width: 4px;
+  height: 4px;
+  margin-left: -2px;
+  border-radius: 50%;
+  background: var(--color-accent);
+}
+
+.date-item.current.has-content::after {
+  background: rgba(255, 255, 255, 0.85);
+}
+
+/* Contrôle invisible dont le seul rôle est de provoquer le retour haptique
+   d'iOS, faute de navigator.vibrate dans Safari — voir tickHaptique(). */
+.haptique-ios {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 1px;
+  height: 1px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Le grossissement du jour courant et le défilement doux relèvent du confort :
+   on les retire pour qui demande moins d'animations. */
+@media (prefers-reduced-motion: reduce) {
+  .date-item {
+    transition: none;
+  }
+
+  .date-item.current {
+    transform: none;
+  }
 }
 
 .btn-clear-day {

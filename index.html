@@ -78,9 +78,14 @@
     </div>
   </div>
 
+  <!-- L'enveloppe interne n'est pas décorative : c'est elle qui se laisse
+       rogner quand la rangée se replie au défilement sur téléphone (voir
+       #niveau-row dans css/style.css). -->
   <div class="header-row" id="niveau-row" hidden>
-    <span class="header-row-label">Niveau de classe</span>
-    <span id="niveau-toggles" class="checkbox-group"></span>
+    <div class="header-row-inner">
+      <span class="header-row-label">Niveau de classe</span>
+      <span id="niveau-toggles" class="checkbox-group"></span>
+    </div>
   </div>
 
   <div class="header-row" id="mode-row">

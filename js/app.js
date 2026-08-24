@@ -389,6 +389,90 @@ function renderVideoModeToggle() {
   });
 }
 
+/* ---------- En-tête compact au défilement ---------- */
+
+// En deçà de ce défilement, l'en-tête reste déployé : se replier dès les
+// premiers pixels donnerait un sursaut au moindre frôlement du haut de page.
+const SEUIL_COMPACT_PX = 80;
+
+// Amplitude minimale d'un geste avant de changer d'état. Sans elle, un doigt
+// posé sur l'écran ferait osciller l'en-tête à chaque pixel.
+const AMPLITUDE_COMPACT_PX = 8;
+
+// Temps pendant lequel on cesse de lire la position de défilement après un
+// changement d'état, le temps que l'en-tête ait fini de changer de taille.
+// Doit couvrir la transition déclarée dans css/style.css (0,25 s), avec de la
+// marge pour un appareil qui peine.
+const DUREE_REPLI_MS = 350;
+
+// Descendre replie l'en-tête, remonter le redéploie — et le haut de page le
+// redéploie toujours. Le repli lui-même est affaire de CSS, et n'a lieu que
+// sur écran étroit : ici on ne fait que poser la classe.
+function surveillerDefilementPage() {
+  const header = document.querySelector(".site-header");
+  let dernierY = Math.max(0, window.scrollY);
+  let derniereHauteur = header.getBoundingClientRect().height;
+  let finDuRepli = 0;
+  let enAttente = false;
+
+  function evaluer() {
+    enAttente = false;
+    const y = Math.max(0, window.scrollY);
+    const hauteur = header.getBoundingClientRect().height;
+
+    // L'en-tête occupe sa place dans le flux : en changeant de taille, il
+    // déplace tout ce qui le suit, et le navigateur rattrape alors la position
+    // de défilement pour garder l'image stable — c'est l'ancrage du
+    // défilement, auquel s'ajoute le recadrage quand on est en bas de page.
+    //
+    // Ces pixels-là ne viennent pas du doigt, et ils n'arrivent pas d'un coup :
+    // ils sont étalés sur toute la durée du repli, à raison d'un cran de
+    // hauteur par image — de l'ordre de l'amplitude qui nous sert justement à
+    // trancher. Les prendre pour un geste, c'est lire un mouvement vers le
+    // haut, redéployer, lire un mouvement vers le bas, replier : la barre se
+    // met à battre. Plutôt que de tenter de démêler geste et rattrapage image
+    // par image, on s'abstient de décider tant que l'en-tête bouge, en gardant
+    // seulement le repère à jour pour repartir juste à la fin.
+    if (performance.now() < finDuRepli) {
+      dernierY = y;
+      derniereHauteur = hauteur;
+      return;
+    }
+
+    // Hors de cette fenêtre, la hauteur ne devrait plus bouger. Si elle bouge
+    // quand même — appareil lent, animation plus longue que prévu — la
+    // retrancher évite qu'un reste de rattrapage passe pour un geste.
+    const delta = y - dernierY + (derniereHauteur - hauteur);
+    const compact = header.classList.contains("is-compact");
+    let voulu = compact;
+
+    if (y <= SEUIL_COMPACT_PX) voulu = false;
+    else if (delta > AMPLITUDE_COMPACT_PX) voulu = true;
+    else if (delta < -AMPLITUDE_COMPACT_PX) voulu = false;
+    // Geste trop court pour trancher : on garde l'état ET les points de
+    // repère, sinon une suite de micro-déplacements ne déclencherait jamais
+    // rien.
+    else return;
+
+    dernierY = y;
+    derniereHauteur = hauteur;
+
+    if (voulu === compact) return;
+    header.classList.toggle("is-compact", voulu);
+    finDuRepli = performance.now() + DUREE_REPLI_MS;
+  }
+
+  window.addEventListener(
+    "scroll",
+    () => {
+      if (enAttente) return;
+      enAttente = true;
+      requestAnimationFrame(evaluer);
+    },
+    { passive: true }
+  );
+}
+
 /* ---------- Rendu : contenu principal ---------- */
 
 function render() {
@@ -535,53 +619,313 @@ function renderChapitreMode(container) {
   });
 }
 
-function renderDateMode(container) {
+/* ---------- Retour haptique ---------- */
+
+// Deux ticks trop rapprochés se confondent en un bourdonnement : passé un
+// lancer très vif, on en saute.
+const INTERVALLE_TICK_MIN_MS = 28;
+
+let dernierTick = 0;
+let interrupteurHaptique = null;
+
+// Safari n'implémente pas navigator.vibrate. Depuis iOS 17.4, basculer un
+// <input type="checkbox" switch> déclenche le retour haptique du système :
+// c'est le seul levier qu'une page web ait sur l'iPhone. Le contrôle reste
+// hors flux et hors tabulation, il n'existe que pour être cliqué par le code.
+function interrupteurIOS() {
+  if (interrupteurHaptique) return interrupteurHaptique;
+  if (!("switch" in document.createElement("input"))) return null;
+
+  const boite = document.createElement("span");
+  boite.className = "haptique-ios";
+  boite.setAttribute("aria-hidden", "true");
+
+  const input = document.createElement("input");
+  input.type = "checkbox";
+  input.setAttribute("switch", "");
+  input.tabIndex = -1;
+
+  boite.appendChild(input);
+  document.body.appendChild(boite);
+  interrupteurHaptique = input;
+  return input;
+}
+
+function tickHaptique() {
+  const maintenant = Date.now();
+  if (maintenant - dernierTick < INTERVALLE_TICK_MIN_MS) return;
+  dernierTick = maintenant;
+
+  // 8 ms : la secousse la plus courte qu'un moteur Android rende encore, donc
+  // un « clic » plutôt qu'une vibration. Renvoie false si le navigateur refuse
+  // (pas d'interaction utilisateur encore, vibration désactivée…).
+  if (typeof navigator.vibrate === "function" && navigator.vibrate(8)) return;
+
+  const interrupteur = interrupteurIOS();
+  if (interrupteur) interrupteur.click();
+}
+
+/* ---------- Bande de dates défilante ---------- */
+
+// Jours engendrés de part et d'autre du jour central. Assez large pour qu'un
+// lancer de doigt, même vif, n'atteigne jamais le bord : la piste n'est donc
+// régénérée qu'une fois le défilement arrêté, sans jamais couper l'élan.
+const JOURS_TAMPON = 60;
+
+// En deçà de cette distance au bord, la piste est reconstruite autour du jour
+// affiché. C'est ce recentrage, invisible, qui rend le défilement sans fin.
+const MARGE_RECENTRAGE = 25;
+
+// Délai sans le moindre événement de défilement au-delà duquel on considère
+// que la bande s'est arrêtée. `scrollend` ferait l'affaire mais manque encore
+// à l'appel sur les Safari un peu anciens.
+const DELAI_ARRET_MS = 140;
+
+function libelleDateComplet(date) {
+  return date.toLocaleDateString("fr-FR", {
+    weekday: "long",
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
+// Au moins un des niveaux cochés a-t-il des savoir-faire prévus ce jour-là ?
+// Sert à poser un point sous la date : sans repère, faire défiler des semaines
+// de jours vides n'aurait pas de sens.
+function jourPlanifie(iso) {
+  for (const acronyme of state.selectedAcronymes) {
+    const data = state.niveauxData.get(acronyme);
+    const codes = data && data.planning.get(iso);
+    if (codes && codes.size) return true;
+  }
+  return false;
+}
+
+/** Monte la bande de jours défilante dans `container`.
+ *
+ *  Elle s'insère elle-même plutôt que d'être renvoyée : mesurer les positions
+ *  des jours suppose d'être déjà dans la page, et le faire dans la foulée de
+ *  l'insertion — plutôt qu'à la prochaine image — évite que la bande soit un
+ *  instant visible calée sur son premier jour.
+ *
+ *  @param {HTMLElement} container conteneur, déjà présent dans le document.
+ *  @param {(date: Date) => void} onJourChoisi appelé quand le défilement
+ *         s'immobilise sur un jour différent de celui affiché. */
+function monterBandeDates(container, onJourChoisi) {
   const nav = document.createElement("div");
   nav.className = "date-nav";
 
-  const prevDate = addDays(state.selectedDate, -1);
-  const nextDate = addDays(state.selectedDate, 1);
+  const bande = document.createElement("div");
+  bande.className = "date-strip";
+  bande.setAttribute("role", "listbox");
+  bande.setAttribute("aria-label", "Choix du jour");
+  bande.tabIndex = 0;
+
+  const piste = document.createElement("div");
+  piste.className = "date-strip-track";
+  bande.appendChild(piste);
+
   const todayIso = toISODate(startOfToday());
 
-  const goTo = (date) => {
-    state.selectedDate = date;
-    state.openLevels.clear(); // change de jour = on repart avec toutes les vidéos fermées
-    render();
-  };
+  let centreTampon = state.selectedDate; // jour au milieu de la piste
+  let jourAffiche = state.selectedDate; // jour actuellement sous le repère central
+  let elCourant = null;
+  let milieux = []; // abscisse du centre de chaque jour, mesurée une fois par piste
+
+  const dateDeIndex = (i) => addDays(centreTampon, i - JOURS_TAMPON);
+  const indexDeDate = (date) =>
+    JOURS_TAMPON + Math.round((date - centreTampon) / 86400000);
+
+  function creerItem(date) {
+    const el = document.createElement("button");
+    el.type = "button";
+    el.className = "date-item";
+    el.dataset.iso = toISODate(date);
+    el.textContent = formatDateShort(date);
+    el.setAttribute("role", "option");
+    el.setAttribute("aria-label", libelleDateComplet(date));
+    // Cent vingt et un boutons dans l'ordre de tabulation seraient un piège au
+    // clavier : c'est la bande qui reçoit le focus, et les flèches naviguent.
+    el.tabIndex = -1;
+    if (el.dataset.iso === todayIso) el.classList.add("is-today");
+    if (jourPlanifie(el.dataset.iso)) el.classList.add("has-content");
+    el.addEventListener("click", () => centrerSur([...piste.children].indexOf(el), true));
+    return el;
+  }
+
+  function remplir(centre) {
+    centreTampon = centre;
+    elCourant = null;
+    piste.replaceChildren(
+      ...Array.from({ length: JOURS_TAMPON * 2 + 1 }, (_, i) =>
+        creerItem(addDays(centre, i - JOURS_TAMPON))
+      )
+    );
+    milieux = []; // invalidé, remesuré à la prochaine lecture
+    marquerCourant();
+  }
+
+  // Abscisse du centre de chaque jour dans le contenu défilable. `offsetLeft`
+  // se compte depuis le premier ancêtre positionné, qui n'est pas la bande
+  // mais, ici, le corps de la page : sans retrancher l'origine de la piste,
+  // toutes les positions seraient décalées de la marge gauche du contenu.
+  function mesurer() {
+    const origine = piste.offsetLeft;
+    milieux = [...piste.children].map((el) => el.offsetLeft - origine + el.offsetWidth / 2);
+  }
+
+  function marquerCourant() {
+    const el = piste.children[indexDeDate(jourAffiche)];
+    if (el === elCourant) return;
+    if (elCourant) {
+      elCourant.classList.remove("current");
+      elCourant.removeAttribute("aria-selected");
+    }
+    elCourant = el || null;
+    if (elCourant) {
+      elCourant.classList.add("current");
+      elCourant.setAttribute("aria-selected", "true");
+    }
+  }
+
+  // Jour dont le centre est le plus proche du milieu de la bande. Recherche
+  // dichotomique : `milieux` est croissant, et la fonction est appelée à chaque
+  // image de défilement.
+  function indexCentral() {
+    if (!milieux.length) mesurer();
+    const cible = bande.scrollLeft + bande.clientWidth / 2;
+
+    let bas = 0;
+    let haut = milieux.length - 1;
+    while (bas < haut) {
+      const milieu = (bas + haut) >> 1;
+      if (milieux[milieu] < cible) bas = milieu + 1;
+      else haut = milieu;
+    }
+    // `bas` est le premier jour au-delà de la cible : son voisin de gauche peut
+    // être plus proche.
+    if (bas > 0 && cible - milieux[bas - 1] < milieux[bas] - cible) bas -= 1;
+    return bas;
+  }
+
+  function centrerSur(index, doux) {
+    if (index < 0 || index >= piste.children.length) return;
+    if (!milieux.length) mesurer();
+    bande.scrollTo({
+      left: milieux[index] - bande.clientWidth / 2,
+      behavior: doux ? "smooth" : "auto",
+    });
+  }
+
+  function surDefilement() {
+    const date = dateDeIndex(indexCentral());
+    if (toISODate(date) === toISODate(jourAffiche)) return;
+    jourAffiche = date;
+    marquerCourant();
+    tickHaptique();
+  }
+
+  function surArret() {
+    // La dernière position n'a pas forcément été échantillonnée : les images
+    // d'animation ne sont pas rendues quand l'onglet passe à l'arrière-plan,
+    // alors que cette minuterie, elle, se déclenche quand même.
+    surDefilement();
+
+    const index = indexCentral();
+
+    // Approche d'un bord : on reconstruit la piste autour du jour affiché, en
+    // replaçant le défilement pile au même endroit à l'écran pour que la
+    // substitution passe inaperçue. Fait à l'arrêt seulement — toucher à
+    // scrollLeft pendant l'élan le stopperait net.
+    if (index < MARGE_RECENTRAGE || index > piste.children.length - 1 - MARGE_RECENTRAGE) {
+      const decalageEcran = milieux[index] - bande.scrollLeft;
+      remplir(jourAffiche);
+      mesurer();
+      bande.scrollLeft = milieux[JOURS_TAMPON] - decalageEcran;
+    }
+
+    if (toISODate(jourAffiche) !== toISODate(state.selectedDate)) onJourChoisi(jourAffiche);
+  }
+
+  let rafDefilement = null;
+  let minuterieArret = null;
+
+  bande.addEventListener(
+    "scroll",
+    () => {
+      if (rafDefilement === null) {
+        rafDefilement = requestAnimationFrame(() => {
+          rafDefilement = null;
+          surDefilement();
+        });
+      }
+      clearTimeout(minuterieArret);
+      minuterieArret = setTimeout(surArret, DELAI_ARRET_MS);
+    },
+    { passive: true }
+  );
+
+  bande.addEventListener("keydown", (e) => {
+    const pas = e.key === "ArrowLeft" ? -1 : e.key === "ArrowRight" ? 1 : 0;
+    if (!pas) return;
+    e.preventDefault();
+    centrerSur(indexCentral() + pas, true);
+  });
 
   const btnPrev = document.createElement("button");
   btnPrev.type = "button";
   btnPrev.className = "date-nav-arrow";
   btnPrev.textContent = "◀";
   btnPrev.setAttribute("aria-label", "Jour précédent");
-  btnPrev.addEventListener("click", () => goTo(prevDate));
-
-  const spanPrev = document.createElement("span");
-  spanPrev.className = "date-item adjacent";
-  if (toISODate(prevDate) === todayIso) spanPrev.classList.add("is-today");
-  spanPrev.textContent = formatDateShort(prevDate);
-  spanPrev.addEventListener("click", () => goTo(prevDate));
-
-  const spanCurrent = document.createElement("span");
-  spanCurrent.className = "date-item current";
-  if (toISODate(state.selectedDate) === todayIso) spanCurrent.classList.add("is-today");
-  spanCurrent.textContent = formatDateShort(state.selectedDate);
-
-  const spanNext = document.createElement("span");
-  spanNext.className = "date-item adjacent";
-  if (toISODate(nextDate) === todayIso) spanNext.classList.add("is-today");
-  spanNext.textContent = formatDateShort(nextDate);
-  spanNext.addEventListener("click", () => goTo(nextDate));
+  btnPrev.addEventListener("click", () => centrerSur(indexCentral() - 1, true));
 
   const btnNext = document.createElement("button");
   btnNext.type = "button";
   btnNext.className = "date-nav-arrow";
   btnNext.textContent = "▶";
   btnNext.setAttribute("aria-label", "Jour suivant");
-  btnNext.addEventListener("click", () => goTo(nextDate));
+  btnNext.addEventListener("click", () => centrerSur(indexCentral() + 1, true));
 
-  nav.append(btnPrev, spanPrev, spanCurrent, spanNext, btnNext);
+  remplir(state.selectedDate);
+  nav.append(btnPrev, bande, btnNext);
   container.appendChild(nav);
+
+  // Dans la page : mesurable, donc centrable tout de suite.
+  mesurer();
+  centrerSur(JOURS_TAMPON, false);
+
+  // Le centre de la bande se déplace avec sa largeur (rotation de l'écran,
+  // fenêtre redimensionnée) : il faut alors replacer le jour affiché. Un
+  // observateur plutôt qu'un écouteur sur `window`, pour qu'il disparaisse
+  // avec la bande au lieu de s'accumuler à chaque rendu.
+  new ResizeObserver(() => {
+    if (!bande.clientWidth) return;
+    mesurer();
+    centrerSur(indexDeDate(jourAffiche), false);
+  }).observe(bande);
+}
+
+function renderDateMode(container) {
+  const contenu = document.createElement("div");
+  contenu.className = "date-contenu";
+
+  // La bande n'est construite qu'une fois : faire défiler les jours ne doit
+  // reconstruire que le contenu en dessous, sinon la position de la bande —
+  // et l'élan du doigt — seraient perdus à chaque date franchie.
+  monterBandeDates(container, (date) => {
+    state.selectedDate = date;
+    state.openLevels.clear(); // change de jour = on repart avec toutes les vidéos fermées
+    renderContenuDate(contenu);
+    updateSeparatorsOrientation();
+  });
+  container.appendChild(contenu);
+
+  renderContenuDate(contenu);
+}
+
+function renderContenuDate(container) {
+  container.innerHTML = "";
 
   const acronymes = orderedSelectedAcronymes();
   if (!acronymes.length) {
@@ -1286,6 +1630,8 @@ async function demarrer(appEl) {
 
 async function boot() {
   const appEl = document.getElementById("app");
+
+  surveillerDefilementPage();
   let optionData;
   try {
     const res = await fetch("option.json", { cache: "no-store" });
