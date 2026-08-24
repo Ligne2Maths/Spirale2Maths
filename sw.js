@@ -12,7 +12,7 @@
 // Changer ce numéro invalide tous les anciens caches et déclenche la bannière
 // « nouvelle version » chez les visiteurs. À incrémenter à chaque déploiement
 // dont on veut être sûr qu'il parvienne immédiatement à tout le monde.
-const VERSION = "v12";
+const VERSION = "v13";
 
 const CACHE_COQUE = `carnet2maths-coque-${VERSION}`;
 const CACHE_DONNEES = `carnet2maths-donnees-${VERSION}`;

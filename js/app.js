@@ -420,6 +420,81 @@ function renderVideoModeToggle() {
   repositionneursIndicateurs.push(replacer);
 }
 
+/* ---------- Thème clair / sombre ---------- */
+
+// Le thème est déjà posé sur <html> par le script en tête d'index.html : il
+// doit l'être avant le premier rendu, sinon la page s'afficherait en clair le
+// temps du chargement. Il ne reste ici que la bascule et sa mémorisation.
+
+const CLE_THEME = "carnet2maths_theme";
+
+// Couleur de la barre système (Android, Safari sur macOS) : elle reprend le
+// haut du dégradé de l'en-tête, sinon elle resterait claire au-dessus d'une
+// page sombre.
+const COULEUR_BARRE = { clair: "#2A2478", sombre: "#221C62" };
+
+function themeCourant() {
+  return document.documentElement.dataset.theme === "sombre" ? "sombre" : "clair";
+}
+
+function lireThemeMemorise() {
+  try {
+    return localStorage.getItem(CLE_THEME);
+  } catch (e) {
+    return null; // stockage refusé (navigation privée)
+  }
+}
+
+// Coupe les transitions de la page le temps du repeint — voir la règle
+// `[data-bascule-theme]` dans la feuille de style.
+function couperTransitions() {
+  const html = document.documentElement;
+  html.dataset.basculeTheme = "";
+  // Deux images de suite : la première peint le nouveau thème sans transition,
+  // la seconde rend au reste de la page les siennes.
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => delete html.dataset.basculeTheme);
+  });
+}
+
+function appliquerTheme(theme) {
+  couperTransitions();
+  document.documentElement.dataset.theme = theme;
+
+  const meta = document.querySelector('meta[name="theme-color"]');
+  if (meta) meta.content = COULEUR_BARRE[theme];
+
+  // Le bouton n'affiche pas l'état courant mais ce qu'il fera : c'est ce que
+  // dit déjà le dessin (un soleil en mode sombre invite à revenir au jour).
+  const btn = document.getElementById("theme-toggle");
+  if (btn) {
+    const libelle = theme === "sombre" ? "Passer en mode clair" : "Passer en mode sombre";
+    btn.setAttribute("aria-label", libelle);
+    btn.title = libelle;
+  }
+}
+
+function initThemeToggle() {
+  appliquerTheme(themeCourant());
+
+  document.getElementById("theme-toggle").addEventListener("click", () => {
+    const theme = themeCourant() === "sombre" ? "clair" : "sombre";
+    appliquerTheme(theme);
+    try {
+      localStorage.setItem(CLE_THEME, theme);
+    } catch (e) { /* le choix ne vaudra que pour cette visite */ }
+  });
+
+  // Tant que l'utilisateur n'a pas tranché lui-même, le site suit le réglage
+  // du système — y compris s'il change pendant que la page est ouverte, ce que
+  // font iOS et Android au coucher du soleil.
+  window
+    .matchMedia("(prefers-color-scheme: dark)")
+    .addEventListener("change", (e) => {
+      if (!lireThemeMemorise()) appliquerTheme(e.matches ? "sombre" : "clair");
+    });
+}
+
 /* ---------- En-tête compact au défilement ---------- */
 
 // Amplitude minimale d'un geste avant de changer d'état. Sans elle, un doigt
@@ -458,6 +533,7 @@ function basculerEnTete(header, versCompact) {
   const mouvants = [...header.querySelectorAll(".segmented")];
   const fondus = [
     header.querySelector(".site-brand"),
+    header.querySelector(".theme-toggle"),
     header.querySelector("#mode-row .header-row-label"),
     header.querySelector("#niveau-row"),
   ].filter((el) => el && !el.hidden);
@@ -1736,6 +1812,11 @@ async function demarrer(appEl) {
 async function boot() {
   const appEl = document.getElementById("app");
 
+  // Avant tout chargement : le bouton du thème ne dépend d'aucune donnée, et
+  // doit répondre dès la première seconde. Il vit dans la rangée « Affichage »,
+  // donc l'écran de première visite le masque avec elle — mais là, personne
+  // n'a encore rien choisi, et le réglage du système fait seul la loi.
+  initThemeToggle();
   surveillerDefilementPage();
   let optionData;
   try {

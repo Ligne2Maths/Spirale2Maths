@@ -1,4 +1,14 @@
 :root {
+  /* Les deux thèmes sont décrits par les mêmes variables : chaque règle plus
+     bas garde son rôle, seules les valeurs changent. Le thème actif est posé
+     sur <html> (data-theme) par le script en tête d'index.html — avant le
+     premier rendu, sinon la page s'afficherait en clair le temps du
+     chargement — puis basculé par le bouton de l'en-tête.
+
+     `color-scheme` accorde ce que le navigateur dessine lui-même : barres de
+     défilement et cases à cocher. */
+  color-scheme: light;
+
   /* Palette reprise de la charte du jeu d'icônes (dossier `icone/`, voir son
      README) : le dégradé de la tuile, le vert des cases validées et l'indigo
      profond de l'écran de démarrage. Le site, l'icône, la barre système
@@ -24,6 +34,22 @@
   --color-gray-light: #c4c0e8; /* barre « en attente » de l'icône */
   --color-brand-faint: #8c88dc; /* contour de la case « en attente » */
 
+  /* L'accent se décline en trois rôles distincts, que le mode sombre sépare :
+     `--color-accent` pour les traits et les bordures, `--color-accent-dark`
+     pour le texte accentué (donc plus clair que le fond de page en sombre), et
+     `--color-accent-strong` pour les aplats qui portent du texte blanc (donc
+     assez sombre pour lui). En clair, les deux derniers ont la même valeur. */
+  --color-accent-strong: #2a2478;
+  --color-valid-hover: #0c8a64;
+  --color-invalid-hover: #b81f45;
+
+  /* Pastille claire posée sur le dégradé : l'onglet actif des bascules de
+     l'en-tête, et le bouton du bandeau de mise à jour. Le texte qu'elle porte
+     reste sombre dans les deux thèmes, d'où un jeton à part. */
+  --color-pill-bg: #ffffff;
+  --color-pill-bg-hover: #edecfb;
+  --color-pill-fg: #2a2478;
+
   /* L'en-tête est sombre : ses contrôles ne peuvent pas réutiliser les
      couleurs claires du reste de la page, ils se déclinent en blanc
      translucide sur le dégradé. */
@@ -37,7 +63,55 @@
   --radius-sm: 12px;
   --shadow-sm: 0 1px 2px rgba(35, 30, 102, 0.07), 0 1px 3px rgba(35, 30, 102, 0.06);
   --shadow-md: 0 8px 22px rgba(35, 30, 102, 0.12);
+  --shadow-header: 0 2px 14px rgba(35, 30, 102, 0.28);
   --transition: 0.15s ease;
+}
+
+/* ---------- Mode sombre ---------- */
+
+/* La charte du jeu d'icônes est transposée, pas remplacée : l'indigo profond
+   passe des aplats au fond de la page, le dégradé de l'en-tête garde sa
+   descente violet → bleu nuit en restant plus clair que la page qu'il
+   surplombe, et l'accent s'éclaircit juste assez pour se lire dessus. Les
+   verts et rouges de validation gardent leur teinte, assombrie d'un cran :
+   à pleine saturation, ils vibrent sur fond sombre. */
+[data-theme="sombre"] {
+  color-scheme: dark;
+
+  --brand-1: #332c8c;
+  --brand-2: #171343;
+  --brand-deep: #221c62;
+
+  --color-bg: #121028;
+  --color-surface: #1b1842;
+  --color-border: #2c2761;
+  --color-text: #e9e7fa;
+  --color-text-muted: #a49fd0;
+  --color-accent: #6d65e2;
+  --color-accent-dark: #b3adf7;
+  --color-accent-soft: #262158;
+  --color-valid: #14b184;
+  --color-valid-bg: #14352c;
+  --color-invalid: #f4436a;
+  --color-invalid-bg: #3a1626;
+  --color-valid-darker: #2fd3a2;
+  --color-neutral-bg: #262252;
+  --color-gray-light: #3f3a78;
+  --color-brand-faint: #837dc4;
+
+  --color-accent-strong: #4f47c9;
+  --color-valid-hover: #1ac79a;
+  --color-invalid-hover: #ff5f80;
+
+  --color-pill-bg: #e7e4fb;
+  --color-pill-bg-hover: #cfc9f2;
+  --color-pill-fg: #221c62;
+
+  /* Sur fond sombre, une ombre teintée d'indigo ne se voit plus : seul le noir
+     détache encore les cartes. */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.45), 0 1px 3px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 8px 22px rgba(0, 0, 0, 0.5);
+  --shadow-header: 0 2px 14px rgba(0, 0, 0, 0.5);
 }
 
 * {
@@ -74,7 +148,7 @@ body {
   z-index: 10;
   background: linear-gradient(135deg, var(--brand-1) 0%, var(--brand-deep) 55%, var(--brand-2) 100%);
   color: var(--header-fg);
-  box-shadow: 0 2px 14px rgba(35, 30, 102, 0.28);
+  box-shadow: var(--shadow-header);
   /* `env(safe-area-inset-*)` vaut 0 dans un navigateur ordinaire. En app
      installée sur iPhone (viewport-fit=cover + barre d'état translucide,
      voir index.html), c'est ce qui empêche l'encoche de recouvrir le titre
@@ -140,6 +214,106 @@ body {
   white-space: nowrap;
 }
 
+/* ---------- Bouton clair / sombre ---------- */
+
+/* Pastille ronde à la taille du logo, dans le même vocabulaire que les autres
+   contrôles de l'en-tête : blanc translucide sur le dégradé.
+
+   Sa place est au bout de la rangée « Affichage », poussée contre le bord
+   droit — donc sous la bascule du lecteur, avec qui elle s'aligne. La rangée
+   du haut, elle, n'avait plus de quoi l'accueillir : le titre y touche déjà
+   la bascule du lecteur sur un écran de téléphone. Et le voisinage se tient,
+   clair ou sombre étant affaire d'affichage comme le reste de la rangée. */
+.theme-toggle {
+  width: 2.15rem;
+  height: 2.15rem;
+  flex: 0 0 auto;
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: 1px solid var(--header-control-border);
+  border-radius: 50%;
+  background: var(--header-control-bg);
+  color: var(--header-fg);
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition),
+    transform var(--transition);
+}
+
+.theme-toggle:hover {
+  background: rgba(255, 255, 255, 0.2);
+  border-color: rgba(255, 255, 255, 0.5);
+}
+
+.theme-toggle:active {
+  transform: scale(0.92);
+}
+
+.theme-toggle:focus-visible {
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
+.theme-toggle-icon {
+  display: block;
+  width: 1.15rem;
+  height: 1.15rem;
+}
+
+/* Le soleil et la lune sont superposés dans le même dessin : l'un s'efface en
+   pivotant pendant que l'autre arrive. Deux formes pleines plutôt qu'un
+   croissant taillé au masque SVG — un masque animé se redessine mal sur
+   certains navigateurs, et l'icône resterait figée là où elle doit tourner. */
+.theme-toggle-soleil,
+.theme-toggle-lune {
+  fill: currentColor;
+  /* Le repère du pivot est celui du viewBox, pas la boîte de la forme : sans
+     cela le croissant, qui n'est pas centré dans son cadre, tournerait de
+     travers. */
+  transform-box: view-box;
+  transform-origin: 50% 50%;
+  transition: transform 0.45s cubic-bezier(0.34, 1.28, 0.64, 1), opacity 0.3s ease;
+}
+
+.theme-toggle-rayons {
+  stroke: currentColor;
+  stroke-width: 2;
+  stroke-linecap: round;
+}
+
+.theme-toggle-lune {
+  opacity: 0;
+  transform: rotate(80deg) scale(0.35);
+}
+
+[data-theme="sombre"] .theme-toggle-soleil {
+  opacity: 0;
+  transform: rotate(-80deg) scale(0.35);
+}
+
+[data-theme="sombre"] .theme-toggle-lune {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .theme-toggle-soleil,
+  .theme-toggle-lune {
+    transition: none;
+  }
+}
+
+/* Changer de thème repeint toute la page d'un coup. Les transitions posées un
+   peu partout (0,15 s sur les couleurs des boutons, des dates…) feraient
+   traîner ces éléments-là derrière le reste, qui bascule instantanément : on
+   les coupe le temps d'un rendu — voir couperTransitions() dans js/app.js.
+   Le soleil et la lune gardent la leur : c'est le seul mouvement voulu. */
+[data-bascule-theme] *:not(.theme-toggle-soleil):not(.theme-toggle-lune) {
+  transition: none !important;
+}
+
 .header-row {
   display: flex;
   flex-wrap: wrap;
@@ -196,9 +370,9 @@ body {
 }
 
 .toggle-btn.active {
-  background: #fff;
-  border-color: #fff;
-  color: var(--color-accent-dark);
+  background: var(--color-pill-bg);
+  border-color: var(--color-pill-bg);
+  color: var(--color-pill-fg);
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
 }
 
@@ -221,7 +395,7 @@ body {
   left: 0;
   height: calc(100% - 6px);
   width: 0;
-  background: #fff;
+  background: var(--color-pill-bg);
   border-radius: 999px;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
   transition: transform 0.28s ease, width 0.28s ease;
@@ -247,7 +421,7 @@ body {
 }
 
 .segment-btn.active {
-  color: var(--color-accent-dark);
+  color: var(--color-pill-fg);
 }
 
 /* ---------- En-tête compact au défilement ---------- */
@@ -296,6 +470,7 @@ body {
      le temps du glissement, il les épingle à leur ancienne place pour qu'ils
      s'effacent au lieu de s'évanouir d'un coup. */
   .site-header.is-compact .site-brand,
+  .site-header.is-compact .theme-toggle,
   .site-header.is-compact #mode-row .header-row-label,
   .site-header.is-compact #niveau-row {
     display: none;
@@ -395,7 +570,7 @@ body {
 }
 
 .onboarding-start:hover:not(:disabled) {
-  background: var(--color-accent-dark);
+  background: var(--color-accent-strong);
 }
 
 .onboarding-start:active:not(:disabled) {
@@ -614,7 +789,7 @@ main#app {
 
 .date-item.current {
   color: #fff;
-  background: linear-gradient(135deg, var(--color-accent), var(--color-accent-dark));
+  background: linear-gradient(135deg, var(--color-accent), var(--color-accent-strong));
   transform: scale(1.08);
   box-shadow: var(--shadow-sm);
 }
@@ -836,7 +1011,7 @@ main#app {
 
 .btn-niveau.is-open {
   background: var(--color-accent);
-  border-color: var(--color-accent-dark);
+  border-color: var(--color-accent-strong);
   color: #fff;
 }
 
@@ -884,7 +1059,7 @@ main#app {
 }
 
 .btn-valider:hover {
-  background: #0c8a64;
+  background: var(--color-valid-hover);
 }
 
 .btn-fermer {
@@ -901,7 +1076,7 @@ main#app {
 }
 
 .btn-invalider:hover {
-  background: #b81f45;
+  background: var(--color-invalid-hover);
 }
 
 /* ---------- Mode Chapitre : place réservée à la pastille ---------- */
@@ -1054,7 +1229,7 @@ main#app {
 }
 
 .video-thumb-overlay:hover .video-thumb-play {
-  background: var(--color-accent-dark);
+  background: var(--color-accent-strong);
   transform: scale(1.08);
 }
 
@@ -1156,7 +1331,7 @@ main#app {
 }
 
 .pwa-banner-action:hover {
-  background: var(--color-accent-dark);
+  background: var(--color-accent-strong);
 }
 
 .pwa-banner-action:active {
@@ -1164,12 +1339,12 @@ main#app {
 }
 
 .pwa-banner--update .pwa-banner-action {
-  background: #fff;
-  color: var(--color-accent-dark);
+  background: var(--color-pill-bg);
+  color: var(--color-pill-fg);
 }
 
 .pwa-banner--update .pwa-banner-action:hover {
-  background: var(--color-accent-soft);
+  background: var(--color-pill-bg-hover);
 }
 
 .pwa-banner-dismiss {

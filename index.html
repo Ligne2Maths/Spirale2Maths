@@ -61,6 +61,24 @@
   <link rel="apple-touch-startup-image" href="/icons/splash/splash-2048x2732.png" media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
 <!-- ------------------------------------------------------- -->
 
+<!-- Thème clair/sombre, posé avant que la feuille de style ne s'applique :
+     appliqué depuis js/app.js, la page s'afficherait en clair le temps du
+     chargement, puis basculerait sous les yeux de l'utilisateur. On relit le
+     choix mémorisé s'il y en a un, le réglage du système sinon ; la suite
+     (bouton de l'en-tête, couleur de la barre système) est dans js/app.js. -->
+<script>
+  (function () {
+    var choix = null;
+    try {
+      choix = localStorage.getItem("carnet2maths_theme");
+    } catch (e) { /* stockage refusé (navigation privée) : réglage système */ }
+    var sombre = choix
+      ? choix === "sombre"
+      : window.matchMedia("(prefers-color-scheme: dark)").matches;
+    document.documentElement.dataset.theme = sombre ? "sombre" : "clair";
+  })();
+</script>
+
 <link rel="stylesheet" href="css/style.css" />
 <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 </head>
@@ -90,6 +108,29 @@
       <button type="button" class="segment-btn" data-mode="chapitre">Par Chapitre</button>
       <button type="button" class="segment-btn" data-mode="date">Par Date</button>
     </div>
+
+    <!-- Bascule clair/sombre. Les deux dessins sont superposés dans le même
+         SVG : le CSS efface l'un en le faisant pivoter pendant que l'autre
+         arrive. Libellé et couleur de la barre système sont posés par
+         js/app.js, qui connaît le thème en cours. -->
+    <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Passer en mode sombre">
+      <svg class="theme-toggle-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <g class="theme-toggle-soleil">
+          <circle cx="12" cy="12" r="5" />
+          <g class="theme-toggle-rayons">
+            <line x1="12" y1="1.8" x2="12" y2="4.2" />
+            <line x1="12" y1="19.8" x2="12" y2="22.2" />
+            <line x1="1.8" y1="12" x2="4.2" y2="12" />
+            <line x1="19.8" y1="12" x2="22.2" y2="12" />
+            <line x1="4.79" y1="4.79" x2="6.48" y2="6.48" />
+            <line x1="17.52" y1="17.52" x2="19.21" y2="19.21" />
+            <line x1="4.79" y1="19.21" x2="6.48" y2="17.52" />
+            <line x1="17.52" y1="6.48" x2="19.21" y2="4.79" />
+          </g>
+        </g>
+        <path class="theme-toggle-lune" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z" />
+      </svg>
+    </button>
   </div>
 </header>
 
