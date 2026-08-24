@@ -892,43 +892,37 @@ main#app {
   background: #b81f45;
 }
 
-/* ---------- Mode Chapitre sur téléphone : deux niveaux par ligne ----------
+/* ---------- Mode Chapitre sur téléphone : le badge passe en pastille --------
 
    Imbriquée dans le chapitre, une carte SF n'offre que ~270 px de large sur un
-   écran de 375 px (215 px sur un 320 px). Un « bouton + badge » côte à côte en
-   réclamait ~158 px : il n'en tenait qu'un par ligne, et un SF à quatre
-   niveaux occupait quatre rangées.
+   écran de 375 px (215 px sur un 320 px). Le badge de compteurs étant affiché
+   à la suite du bouton, un « bouton + badge » réclamait ~158 px : il n'en
+   tenait qu'un par ligne, et un SF à quatre niveaux occupait quatre rangées.
 
-   On passe donc en grille de deux colonnes et le badge quitte le flux : il se
-   pose en pastille sur le coin haut-droit du bouton, qui garde sa largeur
-   naturelle. La carte y gagne près d'un tiers de hauteur.
+   Le badge quitte donc le flux et se pose en pastille sur le coin haut-droit
+   du bouton. Chaque élément ne pèse plus alors que la largeur du bouton
+   (93 px), et le `flex-wrap` de `.niveau-buttons` en case de lui-même autant
+   que la carte peut en tenir : deux sur un écran de 375 px, trois dès ~400 px.
 
-   Uniquement en mode Chapitre (`.chapitre-body`) : en mode Date le bouton peut
-   se scinder en trois (✔ ✕ ✖, 44 px chacun, soit 132 px), ce qui ne rentrerait
-   pas dans une colonne de 131 px. */
+   Uniquement en mode Chapitre (`.chapitre-body`) : en mode Date, il n'y a pas
+   de compteurs — le bouton s'y scinde en ✔ ✕ ✖ pour noter la séance. */
 @media (max-width: 30rem) {
   .chapitre-body .niveau-buttons {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, max-content));
-    gap: 0.7rem 0.5rem;
-    /* La pastille déborde de 0.45rem au-dessus du bouton : sans cette réserve
-       elle mordrait sur le titre du SF quand il n'y a pas de commentaire.
-       En padding et non en marge — une marge se serait fondue dans celle du
-       titre (fusion des marges verticales) et n'aurait presque rien ajouté. */
+    /* Interligne élargi pour laisser passer la pastille, qui déborde de
+       0.45rem au-dessus de son bouton. L'écart horizontal reste celui de
+       base. */
+    row-gap: 0.7rem;
+    /* Même raison en haut de la zone : sans cette réserve la pastille de la
+       première rangée mordrait sur le titre du SF quand il n'y a pas de
+       commentaire. En padding et non en marge — une marge se serait fondue
+       dans celle du titre (fusion des marges verticales). */
     padding-top: 0.5rem;
   }
 
-  /* La colonne se cale sur le bouton (`max-content`) au lieu de prendre la
-     moitié de la carte : il garde ainsi la largeur naturelle qu'il a en mode
-     Date, et les deux boutons se suivent au lieu d'être séparés par 45 px de
-     vide. C'est aussi ce qui cale la pastille sur SON coin — elle se repère
-     sur `.niveau-item`, qui doit donc s'arrêter au bord du bouton.
-     Le `minmax(0, …)` sert de soupape sur les écrans les plus étroits (un
-     Galaxy Fold replié n'offre que ~176 px) : la colonne peut alors descendre
-     sous la taille du bouton, qui se resserre au lieu de déborder. */
+  /* Repère de la pastille. `.niveau-item` s'arrête au bord du bouton, c'est
+     donc bien sur SON coin qu'elle se cale. */
   .chapitre-body .niveau-item {
-    position: relative; /* repère de la pastille de compteurs */
-    min-width: 0;
+    position: relative;
   }
 
   .chapitre-body .btn-niveau {
@@ -952,9 +946,9 @@ main#app {
 }
 
 /* En dessous de ~300 px (Galaxy Fold replié, 174 px utiles dans la carte),
-   deux boutons à leur largeur naturelle de 93 px ne tiennent plus côte à côte.
-   Plutôt que de renoncer aux deux colonnes, on leur reprend de la marge
-   intérieure : le libellé, lui, ne bouge pas. */
+   deux boutons à leur largeur naturelle de 93 px ne tiennent plus côte à côte
+   et le flux les empile un par ligne. On leur reprend de la marge intérieure
+   pour en garder deux : le libellé, lui, ne bouge pas. */
 @media (max-width: 19rem) {
   .chapitre-body .btn-niveau {
     padding-left: 0.5rem;
