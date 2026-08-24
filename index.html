@@ -2,10 +2,13 @@
 <html lang="fr">
 <head>
 <meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<!-- viewport-fit=cover : en app installée sur iPhone, la page passe sous
+     l'encoche et la barre d'accueil ; le CSS récupère la place perdue avec
+     env(safe-area-inset-*), voir .site-header et main#app. -->
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 <title>Carnet2Maths</title>
 <meta name="description" content="Carnet2Maths — révisions vidéo de maths par Chapitre ou par Date." />
-<meta name="theme-color" content="#4f46e5" />
+<meta name="theme-color" content="#2A2478" />
 <link rel="canonical" href="https://carnet2maths.fr/" />
 
 <!-- Aperçu lors du partage du lien (WhatsApp, Discord, mail, réseaux sociaux) -->
@@ -21,14 +24,53 @@
 <meta property="og:image:alt" content="Carnet2Maths — révisions vidéo de maths" />
 <meta name="twitter:card" content="summary_large_image" />
 
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'%3E%3Ctext y='.9em' font-size='90'%3E%F0%9F%93%92%3C/text%3E%3C/svg%3E" />
+<!-- ---------- Application web installable (PWA) ---------- -->
+<link rel="manifest" href="/manifest.webmanifest" />
+<link rel="icon" href="/icons/favicon.ico" sizes="32x32" />
+<link rel="icon" href="/icons/favicon.svg" type="image/svg+xml" />
+<link rel="apple-touch-icon" href="/icons/icon-180.png" />
+
+<!-- iOS ne lit pas le manifest pour l'ajout à l'écran d'accueil : nom, mode
+     plein écran et barre d'état se déclarent uniquement par ces balises. -->
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="Carnet2Maths" />
+<meta name="application-name" content="Carnet2Maths" />
+
+<!-- Écrans de démarrage iOS : un PNG par définition d'écran, sinon l'app
+     s'ouvre sur du blanc. Bloc régénéré par `python tools/build_icons.py`. -->
+  <link rel="apple-touch-startup-image" href="/icons/splash/splash-640x1136.png" media="(device-width: 320px) and (device-height: 568px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
+  <link rel="apple-touch-startup-image" href="/icons/splash/splash-750x1334.png" media="(device-width: 375px) and (device-height: 667px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
+  <link rel="apple-touch-startup-image" href="/icons/splash/splash-1242x2208.png" media="(device-width: 414px) and (device-height: 736px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+  <link rel="apple-touch-startup-image" href="/icons/splash/splash-1125x2436.png" media="(device-width: 375px) and (device-height: 812px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+  <link rel="apple-touch-startup-image" href="/icons/splash/splash-828x1792.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
+  <link rel="apple-touch-startup-image" href="/icons/splash/splash-1242x2688.png" media="(device-width: 414px) and (device-height: 896px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+  <link rel="apple-touch-startup-image" href="/icons/splash/splash-1170x2532.png" media="(device-width: 390px) and (device-height: 844px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+  <link rel="apple-touch-startup-image" href="/icons/splash/splash-1179x2556.png" media="(device-width: 393px) and (device-height: 852px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+  <link rel="apple-touch-startup-image" href="/icons/splash/splash-1206x2622.png" media="(device-width: 402px) and (device-height: 874px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+  <link rel="apple-touch-startup-image" href="/icons/splash/splash-1284x2778.png" media="(device-width: 428px) and (device-height: 926px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+  <link rel="apple-touch-startup-image" href="/icons/splash/splash-1290x2796.png" media="(device-width: 430px) and (device-height: 932px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+  <link rel="apple-touch-startup-image" href="/icons/splash/splash-1320x2868.png" media="(device-width: 440px) and (device-height: 956px) and (-webkit-device-pixel-ratio: 3) and (orientation: portrait)" />
+  <link rel="apple-touch-startup-image" href="/icons/splash/splash-1488x2266.png" media="(device-width: 744px) and (device-height: 1133px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
+  <link rel="apple-touch-startup-image" href="/icons/splash/splash-1536x2048.png" media="(device-width: 768px) and (device-height: 1024px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
+  <link rel="apple-touch-startup-image" href="/icons/splash/splash-1620x2160.png" media="(device-width: 810px) and (device-height: 1080px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
+  <link rel="apple-touch-startup-image" href="/icons/splash/splash-1640x2360.png" media="(device-width: 820px) and (device-height: 1180px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
+  <link rel="apple-touch-startup-image" href="/icons/splash/splash-1668x2224.png" media="(device-width: 834px) and (device-height: 1112px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
+  <link rel="apple-touch-startup-image" href="/icons/splash/splash-1668x2388.png" media="(device-width: 834px) and (device-height: 1194px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
+  <link rel="apple-touch-startup-image" href="/icons/splash/splash-2048x2732.png" media="(device-width: 1024px) and (device-height: 1366px) and (-webkit-device-pixel-ratio: 2) and (orientation: portrait)" />
+<!-- ------------------------------------------------------- -->
+
 <link rel="stylesheet" href="css/style.css" />
 <script src="https://cdn.sheetjs.com/xlsx-latest/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 <header class="site-header">
   <div class="header-top-row">
-    <h1 class="site-title">📒 Carnet2Maths</h1>
+    <div class="site-brand">
+      <img class="site-logo" src="/icons/logo-header.svg" width="34" height="34" alt="" />
+      <h1 class="site-title">Carnet2Maths</h1>
+    </div>
     <div class="segmented" id="video-mode-toggle">
       <span class="segment-indicator" id="video-mode-indicator"></span>
       <button type="button" class="segment-btn" data-video-mode="ytb">YTB</button>
@@ -56,5 +98,6 @@
 </main>
 
 <script src="js/app.js"></script>
+<script src="js/pwa.js"></script>
 </body>
 </html>

@@ -1,23 +1,42 @@
 :root {
-  --color-bg: #f4f5fb;
+  /* Palette reprise de la charte du jeu d'icônes (dossier `icone/`, voir son
+     README) : le dégradé de la tuile, le vert des cases validées et l'indigo
+     profond de l'écran de démarrage. Le site, l'icône, la barre système
+     Android et le splash iOS partagent ainsi les mêmes couleurs. */
+  --brand-1: #413ac0; /* haut du dégradé de la tuile */
+  --brand-2: #231e66; /* bas du dégradé */
+  --brand-deep: #2a2478; /* theme_color / background_color du manifest */
+
+  --color-bg: #f2f3fb;
   --color-surface: #ffffff;
-  --color-border: #e3e5f2;
-  --color-text: #1e2233;
-  --color-text-muted: #6b7085;
-  --color-accent: #4f46e5;
-  --color-accent-dark: #4338ca;
-  --color-accent-soft: #eef0ff;
-  --color-valid: #16a34a;
-  --color-valid-bg: #e7f9ee;
-  --color-invalid: #e11d48;
-  --color-invalid-bg: #fdecef;
-  --color-valid-darker: #14532d;
-  --color-neutral-bg: #e9eaef;
-  --color-gray-light: #c2c6d6;
-  --radius: 14px;
-  --radius-sm: 10px;
-  --shadow-sm: 0 1px 2px rgba(30, 34, 51, 0.06), 0 1px 3px rgba(30, 34, 51, 0.05);
-  --shadow-md: 0 8px 20px rgba(30, 34, 51, 0.1);
+  --color-border: #e0e2f4;
+  --color-text: #1f1c4a;
+  --color-text-muted: #6a6795;
+  --color-accent: #4a43c4;
+  --color-accent-dark: #2a2478;
+  --color-accent-soft: #edecfb;
+  --color-valid: #0fa97c; /* cases validées de l'icône */
+  --color-valid-bg: #e3f6f0;
+  --color-invalid: #dc2a55;
+  --color-invalid-bg: #fdecf1;
+  --color-valid-darker: #0a7455;
+  --color-neutral-bg: #e6e6f2;
+  --color-gray-light: #c4c0e8; /* barre « en attente » de l'icône */
+  --color-brand-faint: #8c88dc; /* contour de la case « en attente » */
+
+  /* L'en-tête est sombre : ses contrôles ne peuvent pas réutiliser les
+     couleurs claires du reste de la page, ils se déclinent en blanc
+     translucide sur le dégradé. */
+  --header-fg: #ffffff;
+  --header-fg-muted: rgba(255, 255, 255, 0.66);
+  --header-control-bg: rgba(255, 255, 255, 0.1);
+  --header-control-border: rgba(255, 255, 255, 0.22);
+
+  /* Arrondi calé sur celui de l'icône (115 sur 512, soit 22 %). */
+  --radius: 16px;
+  --radius-sm: 12px;
+  --shadow-sm: 0 1px 2px rgba(35, 30, 102, 0.07), 0 1px 3px rgba(35, 30, 102, 0.06);
+  --shadow-md: 0 8px 22px rgba(35, 30, 102, 0.12);
   --transition: 0.15s ease;
 }
 
@@ -54,10 +73,15 @@ body {
   position: sticky;
   top: 0;
   z-index: 10;
-  background: var(--color-surface);
-  border-bottom: 1px solid var(--color-border);
-  box-shadow: var(--shadow-sm);
-  padding: 0.7rem 1rem 0.85rem;
+  background: linear-gradient(135deg, var(--brand-1) 0%, var(--brand-deep) 55%, var(--brand-2) 100%);
+  color: var(--header-fg);
+  box-shadow: 0 2px 14px rgba(35, 30, 102, 0.28);
+  /* `env(safe-area-inset-*)` vaut 0 dans un navigateur ordinaire. En app
+     installée sur iPhone (viewport-fit=cover + barre d'état translucide,
+     voir index.html), c'est ce qui empêche l'encoche de recouvrir le titre
+     et le dégradé de s'arrêter avant le bord de l'écran. */
+  padding: calc(0.7rem + env(safe-area-inset-top)) calc(1rem + env(safe-area-inset-right)) 0.85rem
+    calc(1rem + env(safe-area-inset-left));
   display: flex;
   flex-direction: column;
   gap: 0.6rem;
@@ -70,15 +94,31 @@ body {
   gap: 0.6rem;
 }
 
+.site-brand {
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  min-width: 0;
+}
+
+.site-logo {
+  width: 34px;
+  height: 34px;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  /* La tuile du logo porte le même dégradé que l'en-tête : sans ce liseré,
+     seul le carnet blanc se détacherait et les coins arrondis du logo
+     disparaîtraient dans le fond. */
+  box-shadow: 0 0 0 1px rgba(255, 255, 255, 0.24), 0 2px 6px rgba(0, 0, 0, 0.28);
+}
+
 .site-title {
   margin: 0;
-  font-size: 1.3rem;
+  font-size: 1.25rem;
   font-weight: 800;
   letter-spacing: -0.01em;
-  background: linear-gradient(135deg, var(--color-accent), #8b7ff5);
-  -webkit-background-clip: text;
-  background-clip: text;
-  color: transparent;
+  color: var(--header-fg);
+  white-space: nowrap;
 }
 
 .header-row {
@@ -91,7 +131,7 @@ body {
 
 .header-row-label {
   font-weight: 600;
-  color: var(--color-text-muted);
+  color: var(--header-fg-muted);
   margin-right: 0.2rem;
   font-size: 0.85rem;
   text-transform: uppercase;
@@ -117,9 +157,9 @@ body {
 .toggle-btn {
   padding: 0.4rem 1rem;
   border-radius: 999px;
-  border: 1px solid var(--color-border);
-  background: var(--color-surface);
-  color: var(--color-text);
+  border: 1px solid var(--header-control-border);
+  background: var(--header-control-bg);
+  color: var(--header-fg);
   font-size: 0.88rem;
   font-weight: 600;
   cursor: pointer;
@@ -128,8 +168,8 @@ body {
 }
 
 .toggle-btn:hover {
-  border-color: var(--color-accent);
-  color: var(--color-accent-dark);
+  border-color: rgba(255, 255, 255, 0.5);
+  background: rgba(255, 255, 255, 0.2);
 }
 
 .toggle-btn:active {
@@ -137,10 +177,10 @@ body {
 }
 
 .toggle-btn.active {
-  background: var(--color-accent);
-  border-color: var(--color-accent-dark);
-  color: #fff;
-  box-shadow: var(--shadow-sm);
+  background: #fff;
+  border-color: #fff;
+  color: var(--color-accent-dark);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
 }
 
 /* Contrôle segmenté (bascule Par Chapitre / Par Date) : un seul actif à la fois,
@@ -149,8 +189,8 @@ body {
 .segmented {
   position: relative;
   display: inline-flex;
-  background: var(--color-bg);
-  border: 1px solid var(--color-border);
+  background: var(--header-control-bg);
+  border: 1px solid var(--header-control-border);
   border-radius: 999px;
   padding: 3px;
   gap: 2px;
@@ -162,9 +202,9 @@ body {
   left: 0;
   height: calc(100% - 6px);
   width: 0;
-  background: var(--color-accent);
+  background: #fff;
   border-radius: 999px;
-  box-shadow: var(--shadow-sm);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
   transition: transform 0.28s ease, width 0.28s ease;
 }
 
@@ -177,17 +217,17 @@ body {
   border-radius: 999px;
   font-size: 0.88rem;
   font-weight: 600;
-  color: var(--color-text-muted);
+  color: var(--header-fg-muted);
   cursor: pointer;
   transition: color var(--transition);
 }
 
 .segment-btn:hover {
-  color: var(--color-accent-dark);
+  color: #fff;
 }
 
 .segment-btn.active {
-  color: #fff;
+  color: var(--color-accent-dark);
 }
 
 /* ---------- Écran de première visite ---------- */
@@ -281,7 +321,13 @@ body {
 main#app {
   max-width: 900px;
   margin: 0 auto;
-  padding: 1.25rem 1rem 3rem;
+  padding: 1.25rem calc(1rem + env(safe-area-inset-right)) calc(3rem + env(safe-area-inset-bottom))
+    calc(1rem + env(safe-area-inset-left));
+}
+
+#loading-message {
+  color: var(--color-text-muted);
+  font-style: italic;
 }
 
 .empty-message {
@@ -416,7 +462,7 @@ main#app {
 }
 
 .date-item.adjacent {
-  color: var(--color-gray-light);
+  color: var(--color-brand-faint);
   font-weight: 600;
   cursor: pointer;
   background: none;
@@ -660,16 +706,16 @@ main#app {
 }
 
 .btn-valider:hover {
-  background: #0f7a37;
+  background: #0c8a64;
 }
 
 .btn-fermer {
   background: var(--color-gray-light);
-  color: #33383f;
+  color: var(--color-text);
 }
 
 .btn-fermer:hover {
-  background: #9aa2af;
+  background: var(--color-brand-faint);
 }
 
 .btn-invalider {
@@ -677,7 +723,7 @@ main#app {
 }
 
 .btn-invalider:hover {
-  background: #be123c;
+  background: #b81f45;
 }
 
 /* ---------- Vidéos ---------- */
@@ -808,5 +854,162 @@ main#app {
 @media (min-width: 700px) {
   .video-grid {
     grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  }
+}
+
+/* ---------- Installation et mise à jour (PWA) ---------- */
+
+/* Bandeau discret en bas d'écran, monté par js/pwa.js : proposition
+   d'installation (Android/desktop), marche à suivre iOS, ou signalement
+   d'une nouvelle version déjà téléchargée par le service worker. */
+.pwa-banner {
+  position: fixed;
+  left: 50%;
+  bottom: calc(1rem + env(safe-area-inset-bottom));
+  z-index: 50;
+  width: min(30rem, calc(100vw - 1.5rem));
+  transform: translate(-50%, calc(100% + 2rem));
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.8rem 0.9rem;
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow-md);
+  opacity: 0;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.pwa-banner.is-visible {
+  transform: translate(-50%, 0);
+  opacity: 1;
+}
+
+/* Le bandeau de mise à jour est une information, pas une offre : il se
+   distingue par le dégradé de la charte plutôt que par le fond blanc. */
+.pwa-banner.pwa-banner--update {
+  background: linear-gradient(135deg, var(--brand-1), var(--brand-2));
+  border-color: transparent;
+  color: #fff;
+}
+
+.pwa-banner-icon {
+  width: 2.5rem;
+  height: 2.5rem;
+  flex: 0 0 auto;
+  border-radius: 10px;
+}
+
+.pwa-banner-text {
+  display: flex;
+  flex-direction: column;
+  gap: 0.1rem;
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.pwa-banner-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+}
+
+.pwa-banner-desc {
+  font-size: 0.82rem;
+  color: var(--color-text-muted);
+}
+
+.pwa-banner--update .pwa-banner-desc {
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.pwa-banner-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+  flex: 0 0 auto;
+}
+
+.pwa-banner-action {
+  padding: 0.5rem 0.95rem;
+  min-height: 2.5rem;
+  border: none;
+  border-radius: 999px;
+  background: var(--color-accent);
+  color: #fff;
+  font-size: 0.88rem;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background var(--transition), transform var(--transition);
+}
+
+.pwa-banner-action:hover {
+  background: var(--color-accent-dark);
+}
+
+.pwa-banner-action:active {
+  transform: scale(0.96);
+}
+
+.pwa-banner--update .pwa-banner-action {
+  background: #fff;
+  color: var(--color-accent-dark);
+}
+
+.pwa-banner--update .pwa-banner-action:hover {
+  background: var(--color-accent-soft);
+}
+
+.pwa-banner-dismiss {
+  width: 2.25rem;
+  height: 2.25rem;
+  flex: 0 0 auto;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 1rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+
+.pwa-banner-dismiss:hover {
+  background: var(--color-neutral-bg);
+  color: var(--color-text);
+}
+
+.pwa-banner--update .pwa-banner-dismiss {
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.pwa-banner--update .pwa-banner-dismiss:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+
+/* Marche à suivre iOS : Safari n'expose aucune API d'installation, il faut
+   décrire le geste. L'icône « Partager » est dessinée en SVG inline par
+   js/pwa.js pour rester lisible quelle que soit la police du système. */
+.pwa-ios-steps {
+  display: inline;
+}
+
+.pwa-ios-icon {
+  width: 1em;
+  height: 1em;
+  vertical-align: -0.15em;
+  margin: 0 0.1em;
+}
+
+@media (max-width: 30rem) {
+  .pwa-banner {
+    flex-wrap: wrap;
+  }
+
+  .pwa-banner-actions {
+    width: 100%;
+    justify-content: flex-end;
   }
 }
