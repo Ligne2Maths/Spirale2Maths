@@ -96,11 +96,6 @@
     </div>
   </div>
 
-  <div class="header-row" id="niveau-row" hidden>
-    <span class="header-row-label">Niveau de classe</span>
-    <span id="niveau-toggles" class="checkbox-group"></span>
-  </div>
-
   <div class="header-row" id="mode-row">
     <span class="header-row-label">Affichage</span>
     <div class="segmented" id="mode-toggle">
@@ -109,28 +104,45 @@
       <button type="button" class="segment-btn" data-mode="date">Par Date</button>
     </div>
 
-    <!-- Bascule clair/sombre. Les deux dessins sont superposés dans le même
-         SVG : le CSS efface l'un en le faisant pivoter pendant que l'autre
-         arrive. Libellé et couleur de la barre système sont posés par
-         js/app.js, qui connaît le thème en cours. -->
-    <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Passer en mode sombre">
-      <svg class="theme-toggle-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-        <g class="theme-toggle-soleil">
-          <circle cx="12" cy="12" r="5" />
-          <g class="theme-toggle-rayons">
-            <line x1="12" y1="1.8" x2="12" y2="4.2" />
-            <line x1="12" y1="19.8" x2="12" y2="22.2" />
-            <line x1="1.8" y1="12" x2="4.2" y2="12" />
-            <line x1="19.8" y1="12" x2="22.2" y2="12" />
-            <line x1="4.79" y1="4.79" x2="6.48" y2="6.48" />
-            <line x1="17.52" y1="17.52" x2="19.21" y2="19.21" />
-            <line x1="4.79" y1="19.21" x2="6.48" y2="17.52" />
-            <line x1="17.52" y1="6.48" x2="19.21" y2="4.79" />
+    <!-- Les deux pastilles rondes du bout de rangée : le choix des niveaux de
+         classe, puis la bascule clair/sombre. -->
+    <div class="header-tools">
+      <!-- Trois barres croissantes : le niveau de classe. Le détail du choix
+           vit dans la fenêtre qui s'ouvre au clic — celle de la première
+           visite, rouverte telle quelle. Le bouton reste masqué tant qu'il n'y
+           a qu'un seul niveau configuré (js/app.js). -->
+      <button type="button" class="niveau-btn" id="niveau-btn" hidden aria-haspopup="dialog"
+              aria-label="Choisir les niveaux de classe">
+        <svg class="niveau-btn-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <rect x="3" y="14" width="4.6" height="6.5" rx="1.6" />
+          <rect x="9.7" y="9.25" width="4.6" height="11.25" rx="1.6" />
+          <rect x="16.4" y="4.5" width="4.6" height="16" rx="1.6" />
+        </svg>
+      </button>
+
+      <!-- Bascule clair/sombre. Les deux dessins sont superposés dans le même
+           SVG : le CSS efface l'un en le faisant pivoter pendant que l'autre
+           arrive. Libellé et couleur de la barre système sont posés par
+           js/app.js, qui connaît le thème en cours. -->
+      <button type="button" class="theme-toggle" id="theme-toggle" aria-label="Passer en mode sombre">
+        <svg class="theme-toggle-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+          <g class="theme-toggle-soleil">
+            <circle cx="12" cy="12" r="5" />
+            <g class="theme-toggle-rayons">
+              <line x1="12" y1="1.8" x2="12" y2="4.2" />
+              <line x1="12" y1="19.8" x2="12" y2="22.2" />
+              <line x1="1.8" y1="12" x2="4.2" y2="12" />
+              <line x1="19.8" y1="12" x2="22.2" y2="12" />
+              <line x1="4.79" y1="4.79" x2="6.48" y2="6.48" />
+              <line x1="17.52" y1="17.52" x2="19.21" y2="19.21" />
+              <line x1="4.79" y1="19.21" x2="6.48" y2="17.52" />
+              <line x1="17.52" y1="6.48" x2="19.21" y2="4.79" />
+            </g>
           </g>
-        </g>
-        <path class="theme-toggle-lune" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z" />
-      </svg>
-    </button>
+          <path class="theme-toggle-lune" d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79Z" />
+        </svg>
+      </button>
+    </div>
   </div>
 </header>
 

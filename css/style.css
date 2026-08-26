@@ -214,21 +214,30 @@ body {
   white-space: nowrap;
 }
 
-/* ---------- Bouton clair / sombre ---------- */
+/* ---------- Pastilles rondes de l'en-tête ---------- */
 
-/* Pastille ronde à la taille du logo, dans le même vocabulaire que les autres
-   contrôles de l'en-tête : blanc translucide sur le dégradé.
+/* Deux pastilles à la taille du logo, dans le même vocabulaire que les autres
+   contrôles de l'en-tête : blanc translucide sur le dégradé. Le choix des
+   niveaux de classe d'abord, la bascule clair/sombre ensuite.
 
-   Sa place est au bout de la rangée « Affichage », poussée contre le bord
-   droit — donc sous la bascule du lecteur, avec qui elle s'aligne. La rangée
-   du haut, elle, n'avait plus de quoi l'accueillir : le titre y touche déjà
-   la bascule du lecteur sur un écran de téléphone. Et le voisinage se tient,
-   clair ou sombre étant affaire d'affichage comme le reste de la rangée. */
-.theme-toggle {
+   Leur place est au bout de la rangée « Affichage », poussée contre le bord
+   droit — donc sous la bascule du lecteur, avec qui elles s'alignent. La
+   rangée du haut, elle, n'avait plus de quoi les accueillir : le titre y
+   touche déjà la bascule du lecteur sur un écran de téléphone. Et le
+   voisinage se tient, le niveau de classe comme le thème étant affaire
+   d'affichage, tout comme le reste de la rangée. */
+.header-tools {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.theme-toggle,
+.niveau-btn {
   width: 2.15rem;
   height: 2.15rem;
   flex: 0 0 auto;
-  margin-left: auto;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -242,16 +251,19 @@ body {
     transform var(--transition);
 }
 
-.theme-toggle:hover {
+.theme-toggle:hover,
+.niveau-btn:hover {
   background: rgba(255, 255, 255, 0.2);
   border-color: rgba(255, 255, 255, 0.5);
 }
 
-.theme-toggle:active {
+.theme-toggle:active,
+.niveau-btn:active {
   transform: scale(0.92);
 }
 
-.theme-toggle:focus-visible {
+.theme-toggle:focus-visible,
+.niveau-btn:focus-visible {
   outline: 2px solid #fff;
   outline-offset: 2px;
 }
@@ -260,6 +272,42 @@ body {
   display: block;
   width: 1.15rem;
   height: 1.15rem;
+}
+
+/* Trois barres de hauteur croissante : le niveau de classe. Au survol elles
+   poussent d'un cheveu, l'une après l'autre — assez pour que le dessin se
+   lise comme une progression plutôt que comme trois traits. */
+.niveau-btn-icon {
+  display: block;
+  width: 1.15rem;
+  height: 1.15rem;
+  fill: currentColor;
+}
+
+.niveau-btn-icon rect {
+  /* Le repère du pivot est celui de la forme, pas du viewBox : chaque barre
+     doit grandir depuis sa propre base, toutes posées sur la même ligne. */
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+  transition: transform 0.22s cubic-bezier(0.34, 1.28, 0.64, 1);
+}
+
+.niveau-btn:hover .niveau-btn-icon rect {
+  transform: scaleY(1.15);
+}
+
+.niveau-btn:hover .niveau-btn-icon rect:nth-child(2) {
+  transition-delay: 0.04s;
+}
+
+.niveau-btn:hover .niveau-btn-icon rect:nth-child(3) {
+  transition-delay: 0.08s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .niveau-btn-icon rect {
+    transition: none;
+  }
 }
 
 /* Le soleil et la lune sont superposés dans le même dessin : l'un s'efface en
@@ -331,13 +379,6 @@ body {
   letter-spacing: 0.03em;
 }
 
-.checkbox-group,
-.header-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.6rem;
-}
-
 .checkbox-item,
 .radio-item {
   display: inline-flex;
@@ -345,35 +386,6 @@ body {
   gap: 0.3rem;
   cursor: pointer;
   user-select: none;
-}
-
-.toggle-btn {
-  padding: 0.4rem 1rem;
-  border-radius: 999px;
-  border: 1px solid var(--header-control-border);
-  background: var(--header-control-bg);
-  color: var(--header-fg);
-  font-size: 0.88rem;
-  font-weight: 600;
-  cursor: pointer;
-  transition: background var(--transition), border-color var(--transition), color var(--transition),
-    transform var(--transition), box-shadow var(--transition);
-}
-
-.toggle-btn:hover {
-  border-color: rgba(255, 255, 255, 0.5);
-  background: rgba(255, 255, 255, 0.2);
-}
-
-.toggle-btn:active {
-  transform: scale(0.96);
-}
-
-.toggle-btn.active {
-  background: var(--color-pill-bg);
-  border-color: var(--color-pill-bg);
-  color: var(--color-pill-fg);
-  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.25);
 }
 
 /* Contrôle segmenté (bascule Par Chapitre / Par Date) : un seul actif à la fois,
@@ -429,9 +441,9 @@ body {
 /* Sur un écran de téléphone, l'en-tête collant mangeait près du tiers de la
    hauteur utile. Dès que l'on descend dans la page, il se réduit à une seule
    ligne : le mode d'affichage à gauche, le choix du lecteur à droite. Le logo,
-   le titre, le libellé « Affichage » et la rangée des niveaux de classe
-   s'effacent — on les lit en arrivant, ils ne servent plus une fois la lecture
-   commencée. Remonter les fait revenir.
+   le titre, le libellé « Affichage » et les deux pastilles rondes s'effacent —
+   on les lit en arrivant, ils ne servent plus une fois la lecture commencée.
+   Remonter les fait revenir.
 
    Le passage d'un état à l'autre est animé, mais pas d'ici : aucune transition
    CSS ne sait interpoler entre une colonne de trois rangées et une grille d'une
@@ -470,9 +482,8 @@ body {
      le temps du glissement, il les épingle à leur ancienne place pour qu'ils
      s'effacent au lieu de s'évanouir d'un coup. */
   .site-header.is-compact .site-brand,
-  .site-header.is-compact .theme-toggle,
-  .site-header.is-compact #mode-row .header-row-label,
-  .site-header.is-compact #niveau-row {
+  .site-header.is-compact .header-tools,
+  .site-header.is-compact #mode-row .header-row-label {
     display: none;
   }
 
@@ -496,16 +507,70 @@ body {
   }
 }
 
-/* ---------- Écran de première visite ---------- */
+/* ---------- Fenêtre du choix des niveaux de classe ---------- */
+
+/* Même fenêtre pour deux moments : l'accueil de la première visite, qui ne
+   laisse pas passer tant que rien n'est coché, et le réglage rouvert plus tard
+   depuis la pastille aux trois barres de l'en-tête. Un seul habillage, donc,
+   et un seul comportement à retenir pour qui l'a déjà vue une fois. */
+
+.modal-fond {
+  position: fixed;
+  inset: 0;
+  z-index: 100; /* au-dessus de l'en-tête collant (10) et des bandeaux PWA (50) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  /* Sur un téléphone, la fenêtre peut dépasser : elle défile, et les marges
+     tiennent compte de l'encoche comme du bas d'écran arrondi. */
+  overflow-y: auto;
+  padding: calc(1rem + env(safe-area-inset-top)) calc(1rem + env(safe-area-inset-right))
+    calc(1rem + env(safe-area-inset-bottom)) calc(1rem + env(safe-area-inset-left));
+  background: rgba(21, 18, 62, 0.55);
+  backdrop-filter: blur(2px);
+  opacity: 0;
+  transition: opacity 0.2s ease;
+}
+
+.modal-fond.is-visible {
+  opacity: 1;
+}
+
+/* Le fondu de sortie dure le temps qu'il dure : sans cela, une fenêtre qu'on
+   vient de fermer intercepterait encore les clics, invisible. */
+.modal-fond:not(.is-visible) {
+  pointer-events: none;
+}
+
+/* La page derrière ne doit plus défiler sous le doigt pendant que la fenêtre
+   est ouverte. */
+body.modal-ouvert {
+  overflow: hidden;
+}
 
 .onboarding {
+  position: relative;
+  width: 100%;
   max-width: 26rem;
-  margin: 2.5rem auto 0;
+  margin: auto; /* recentre verticalement même quand le fond défile */
   padding: 1.6rem 1.4rem;
   background: var(--color-surface);
   border: 1px solid var(--color-border);
   border-radius: var(--radius);
   box-shadow: var(--shadow-md);
+  transform: translateY(8px) scale(0.98);
+  transition: transform 0.22s cubic-bezier(0.34, 1.28, 0.64, 1);
+}
+
+.modal-fond.is-visible .onboarding {
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .modal-fond,
+  .onboarding {
+    transition: none;
+  }
 }
 
 .onboarding-title {
@@ -514,6 +579,38 @@ body {
   font-weight: 800;
   text-align: center;
   color: var(--color-text);
+}
+
+/* Croix de fermeture, absente de la première visite : là, le choix n'est pas
+   facultatif. */
+.onboarding-close {
+  position: absolute;
+  top: 0.55rem;
+  right: 0.55rem;
+  width: 2rem;
+  height: 2rem;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 1.05rem;
+  line-height: 1;
+  cursor: pointer;
+  transition: background var(--transition), color var(--transition);
+}
+
+.onboarding-close:hover {
+  background: var(--color-neutral-bg);
+  color: var(--color-text);
+}
+
+/* Le titre garde ses distances avec la croix. */
+.onboarding-close + .onboarding-title {
+  padding: 0 2rem;
 }
 
 .onboarding-list {
@@ -555,8 +652,14 @@ body {
   cursor: pointer;
 }
 
+.onboarding-actions {
+  display: flex;
+  gap: 0.6rem;
+}
+
 .onboarding-start {
   display: block;
+  flex: 1 1 auto;
   width: 100%;
   padding: 0.75rem 1.2rem;
   border: none;
@@ -580,6 +683,25 @@ body {
 .onboarding-start:disabled {
   background: var(--color-gray-light);
   cursor: not-allowed;
+}
+
+/* Bouton secondaire : même gabarit que « Valider », sans l'aplat. */
+.onboarding-cancel {
+  flex: 0 0 auto;
+  padding: 0.75rem 1.2rem;
+  border: 1px solid var(--color-border);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--color-text-muted);
+  font-size: 0.98rem;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background var(--transition), border-color var(--transition), color var(--transition);
+}
+
+.onboarding-cancel:hover {
+  border-color: var(--color-accent);
+  color: var(--color-text);
 }
 
 /* ---------- Contenu principal ---------- */

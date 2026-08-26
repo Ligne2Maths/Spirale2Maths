@@ -286,52 +286,81 @@ function repositionnerIndicateurs() {
 
 window.addEventListener("resize", repositionnerIndicateurs);
 
-function renderNiveauToggles() {
-  const container = document.getElementById("niveau-toggles");
-  container.innerHTML = "";
+// Les niveaux de classe tenaient autrefois une rangée entière de l'en-tête,
+// une bulle par niveau. Avec des libellés comme « Révision Première », cette
+// rangée coûtait plus de place qu'elle ne rendait de service pour un réglage
+// que l'on touche deux fois par an : elle a laissé la place à une pastille
+// aux trois barres croissantes, qui rouvre la fenêtre de la première visite.
+//
+// La pastille ne sert que s'il y a plusieurs niveaux configurés : avec un
+// seul, le choix serait unique et obligatoire, donc vide de sens.
+function initNiveauBtn() {
+  if (state.optionData.niveaux.length <= 1) return;
 
-  getSortedNiveaux().forEach((n) => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = "toggle-btn";
-    if (state.selectedAcronymes.has(n.acronyme)) btn.classList.add("active");
-    btn.textContent = n.acronyme;
-    btn.addEventListener("click", () => onToggleNiveau(n.acronyme, btn));
-    container.appendChild(btn);
+  const btn = document.getElementById("niveau-btn");
+  btn.hidden = false;
+  btn.addEventListener("click", () => {
+    ouvrirFenetreNiveaux({
+      onValider: appliquerNiveaux,
+      renvoyerFocusVers: btn,
+    });
   });
+  majLibelleNiveauBtn();
 }
 
-async function onToggleNiveau(acronyme, btn) {
-  const isActive = state.selectedAcronymes.has(acronyme);
+// Les bulles disaient d'un coup d'œil quels niveaux étaient affichés ; un
+// dessin, lui, ne dit rien. La liste passe donc dans le libellé du bouton,
+// que lisent l'infobulle et le lecteur d'écran.
+function majLibelleNiveauBtn() {
+  const btn = document.getElementById("niveau-btn");
+  if (btn.hidden) return;
+  const choisis = orderedSelectedAcronymes().join(", ");
+  const texte = `Niveaux de classe : ${choisis || "aucun"}`;
+  btn.setAttribute("aria-label", texte);
+  btn.title = texte;
+}
 
-  if (isActive) {
-    if (state.selectedAcronymes.size === 1) return; // il doit toujours en rester un coché
-    state.selectedAcronymes.delete(acronyme);
-    btn.classList.remove("active");
-    saveSelectedNiveaux();
-    render();
-    return;
-  }
+// Applique le choix sorti de la fenêtre : on enregistre, on charge ce qui
+// manque, on redessine. Un fichier qui refuse de se charger retire son niveau
+// du choix — mais jamais au point de ne plus rien avoir à afficher, auquel cas
+// on remet le choix précédent, lui déjà chargé.
+async function appliquerNiveaux(choisis) {
+  const avant = [...state.selectedAcronymes];
+  const inchange =
+    choisis.length === avant.length && choisis.every((a) => state.selectedAcronymes.has(a));
+  if (inchange) return;
 
-  state.selectedAcronymes.add(acronyme);
-  btn.classList.add("active");
+  state.selectedAcronymes = new Set(choisis);
   saveSelectedNiveaux();
+  majLibelleNiveauBtn();
 
-  if (!state.niveauxData.has(acronyme)) {
-    const appEl = document.getElementById("app");
-    appEl.innerHTML = `<p class="empty-message">Chargement de ${acronyme}…</p>`;
-    try {
-      await ensureNiveauLoaded(acronyme);
-    } catch (err) {
-      state.selectedAcronymes.delete(acronyme);
-      btn.classList.remove("active");
+  const appEl = document.getElementById("app");
+  const manquants = choisis.filter((a) => !state.niveauxData.has(a));
+  const echecs = [];
+
+  if (manquants.length) {
+    appEl.innerHTML = '<p class="empty-message">Chargement…</p>';
+    await Promise.all(
+      manquants.map((a) => ensureNiveauLoaded(a).catch(() => echecs.push(a)))
+    );
+
+    if (echecs.length) {
+      echecs.forEach((a) => state.selectedAcronymes.delete(a));
+      if (!state.selectedAcronymes.size) state.selectedAcronymes = new Set(avant);
       saveSelectedNiveaux();
-      appEl.innerHTML = `<p class="empty-message">Impossible de charger "${acronyme}" (${err.message}).</p>`;
-      return;
+      majLibelleNiveauBtn();
     }
   }
 
   render();
+
+  // L'échec se dit au-dessus de ce qui a pu être chargé, plutôt qu'à la place.
+  if (echecs.length) {
+    const avis = document.createElement("p");
+    avis.className = "empty-message";
+    avis.textContent = `Impossible de charger : ${echecs.join(", ")}.`;
+    appEl.prepend(avis);
+  }
 }
 
 function renderModeToggle() {
@@ -524,7 +553,7 @@ let animationEnTete = null;
  *  résorber : le navigateur, lui, sait animer une transformation.
  *
  *  Les bascules segmentées glissent et changent d'échelle ; le logo, le
- *  libellé « Affichage » et la rangée des niveaux, que le repli retire du
+ *  libellé « Affichage » et les deux pastilles rondes, que le repli retire du
  *  flux, s'effacent en fondu — épinglés le temps de l'animation là où ils
  *  étaient, faute de quoi ils disparaîtraient d'un coup. */
 function basculerEnTete(header, versCompact) {
@@ -533,9 +562,8 @@ function basculerEnTete(header, versCompact) {
   const mouvants = [...header.querySelectorAll(".segmented")];
   const fondus = [
     header.querySelector(".site-brand"),
-    header.querySelector(".theme-toggle"),
+    header.querySelector(".header-tools"),
     header.querySelector("#mode-row .header-row-label"),
-    header.querySelector("#niveau-row"),
   ].filter((el) => el && !el.hidden);
 
   const mesurer = (els) => new Map(els.map((el) => [el, el.getBoundingClientRect()]));
@@ -1721,32 +1749,49 @@ function renderSFCard(acronyme, sf) {
   return card;
 }
 
-/* ---------- Première visite : choix des niveaux ---------- */
+/* ---------- Fenêtre du choix des niveaux de classe ---------- */
 
-// Écran affiché tant que l'utilisateur n'a jamais choisi ses niveaux de
-// classe. Rien n'est coché au départ et "Commencer" reste désactivé tant
-// qu'aucun niveau n'est sélectionné.
-function renderOnboarding(container, onCommencer) {
-  container.innerHTML = "";
+// Une seule fenêtre pour deux moments : l'accueil de la première visite
+// (`premiereVisite`), où rien n'est coché, où « Commencer » reste éteint tant
+// qu'aucun niveau ne l'est, et d'où l'on ne sort qu'en choisissant ; et le
+// réglage rouvert depuis l'en-tête, qui part du choix en cours et se referme
+// sans rien changer si on l'annule.
+let fenetreNiveauxOuverte = null;
+
+function ouvrirFenetreNiveaux({ premiereVisite = false, onValider, renvoyerFocusVers = null } = {}) {
+  if (fenetreNiveauxOuverte) return;
+
+  const fond = document.createElement("div");
+  fond.className = "modal-fond";
 
   const card = document.createElement("div");
   card.className = "onboarding";
+  card.setAttribute("role", "dialog");
+  card.setAttribute("aria-modal", "true");
+  card.setAttribute("aria-labelledby", "fenetre-niveaux-titre");
 
   const titre = document.createElement("h2");
   titre.className = "onboarding-title";
-  titre.textContent = "Sélectionne les niveaux qui t'intéressent";
-  card.appendChild(titre);
+  titre.id = "fenetre-niveaux-titre";
+  titre.textContent = premiereVisite
+    ? "Sélectionne les niveaux qui t'intéressent"
+    : "Niveaux de classe affichés";
 
   const liste = document.createElement("div");
   liste.className = "onboarding-list";
 
-  const btn = document.createElement("button");
-  btn.type = "button";
-  btn.className = "onboarding-start";
-  btn.textContent = "Commencer";
-  btn.disabled = true;
+  const actions = document.createElement("div");
+  actions.className = "onboarding-actions";
 
-  const choisis = new Set();
+  const valider = document.createElement("button");
+  valider.type = "button";
+  valider.className = "onboarding-start";
+  valider.textContent = premiereVisite ? "Commencer" : "Valider";
+  valider.disabled = premiereVisite;
+
+  // Première visite : tout est décoché, le choix reste à faire. Les fois
+  // suivantes, la fenêtre s'ouvre sur l'état courant.
+  const choisis = new Set(premiereVisite ? [] : state.selectedAcronymes);
 
   getSortedNiveaux().forEach((n) => {
     const item = document.createElement("label");
@@ -1755,11 +1800,13 @@ function renderOnboarding(container, onCommencer) {
     const cb = document.createElement("input");
     cb.type = "checkbox";
     cb.value = n.acronyme;
+    cb.checked = choisis.has(n.acronyme);
+    item.classList.toggle("is-checked", cb.checked);
     cb.addEventListener("change", () => {
       if (cb.checked) choisis.add(n.acronyme);
       else choisis.delete(n.acronyme);
       item.classList.toggle("is-checked", cb.checked);
-      btn.disabled = choisis.size === 0;
+      valider.disabled = choisis.size === 0; // il doit toujours en rester un coché
     });
 
     const texte = document.createElement("span");
@@ -1769,15 +1816,97 @@ function renderOnboarding(container, onCommencer) {
     liste.appendChild(item);
   });
 
-  card.appendChild(liste);
+  card.append(titre, liste);
 
-  btn.addEventListener("click", () => {
+  // La croix, la touche Échap, le clic à côté et le bouton « Annuler »
+  // n'existent que pour la fenêtre rouverte : à la première visite, il n'y a
+  // pas encore de « à côté » où revenir.
+  const focusAvant = renvoyerFocusVers || document.activeElement;
+
+  function fermer() {
+    if (fenetreNiveauxOuverte !== fond) return;
+    fenetreNiveauxOuverte = null;
+    document.removeEventListener("keydown", surTouche, true);
+    document.body.classList.remove("modal-ouvert");
+    fond.classList.remove("is-visible");
+    const retirer = () => fond.remove();
+    fond.addEventListener("transitionend", retirer, { once: true });
+    setTimeout(retirer, 400); // filet si la transition n'a pas lieu
+    if (focusAvant && focusAvant.focus) focusAvant.focus();
+  }
+
+  // Le clavier ne doit pas sortir de la fenêtre tant qu'elle est ouverte : la
+  // page derrière est inerte, tabuler jusqu'à elle ne mènerait nulle part.
+  function surTouche(e) {
+    if (e.key === "Escape" && !premiereVisite) {
+      e.preventDefault();
+      fermer();
+      return;
+    }
+    if (e.key !== "Tab") return;
+    const focusables = [...card.querySelectorAll("input, button")].filter((el) => !el.disabled);
+    if (!focusables.length) return;
+    const premier = focusables[0];
+    const dernier = focusables[focusables.length - 1];
+    if (e.shiftKey && document.activeElement === premier) {
+      e.preventDefault();
+      dernier.focus();
+    } else if (!e.shiftKey && document.activeElement === dernier) {
+      e.preventDefault();
+      premier.focus();
+    }
+  }
+
+  if (!premiereVisite) {
+    const croix = document.createElement("button");
+    croix.type = "button";
+    croix.className = "onboarding-close";
+    croix.setAttribute("aria-label", "Fermer");
+    croix.textContent = "✕";
+    croix.addEventListener("click", fermer);
+    card.prepend(croix);
+
+    const annuler = document.createElement("button");
+    annuler.type = "button";
+    annuler.className = "onboarding-cancel";
+    annuler.textContent = "Annuler";
+    annuler.addEventListener("click", fermer);
+    actions.appendChild(annuler);
+
+    fond.addEventListener("click", (e) => {
+      if (e.target === fond) fermer();
+    });
+  }
+
+  valider.addEventListener("click", () => {
     if (!choisis.size) return;
-    onCommencer([...choisis]);
+    // On rend la liste dans l'ordre d'affichage des niveaux, pas dans celui
+    // des clics : c'est cet ordre-là qui gouverne le reste de la page.
+    const retenus = getSortedNiveaux()
+      .map((n) => n.acronyme)
+      .filter((a) => choisis.has(a));
+    fermer();
+    onValider(retenus);
   });
-  card.appendChild(btn);
+  actions.appendChild(valider);
 
-  container.appendChild(card);
+  card.appendChild(actions);
+  fond.appendChild(card);
+  document.body.appendChild(fond);
+  document.body.classList.add("modal-ouvert");
+  fenetreNiveauxOuverte = fond;
+  document.addEventListener("keydown", surTouche, true);
+
+  // Forcer un calcul de mise en page fige l'état fermé avant qu'on ne pose la
+  // classe : sans cela le navigateur peint directement l'état final, sans
+  // transition. On ne passe pas par requestAnimationFrame, qui ne se déclenche
+  // pas tant que l'onglet est en arrière-plan — la fenêtre resterait invisible
+  // au premier plan retrouvé.
+  void fond.offsetHeight;
+  fond.classList.add("is-visible");
+
+  const premierChamp = card.querySelector("input");
+  if (premierChamp) premierChamp.focus({ preventScroll: true });
 }
 
 // Les contrôles d'en-tête n'ont pas de sens pendant le choix initial, et
@@ -1791,12 +1920,9 @@ function setHeaderControlsVisible(visible) {
 /* ---------- Démarrage ---------- */
 
 async function demarrer(appEl) {
-  renderNiveauToggles();
+  initNiveauBtn();
   renderModeToggle();
   renderVideoModeToggle();
-
-  const niveauRow = document.getElementById("niveau-row");
-  if (state.optionData.niveaux.length > 1) niveauRow.hidden = false;
 
   appEl.innerHTML = '<p class="empty-message">Chargement…</p>';
   try {
@@ -1845,11 +1971,15 @@ async function boot() {
 
   if (premiereVisite && optionData.niveaux.length > 1) {
     setHeaderControlsVisible(false);
-    renderOnboarding(appEl, (choisis) => {
-      state.selectedAcronymes = new Set(choisis);
-      saveSelectedNiveaux();
-      setHeaderControlsVisible(true);
-      demarrer(appEl);
+    appEl.innerHTML = ""; // rien derrière la fenêtre : il n'y a encore rien à montrer
+    ouvrirFenetreNiveaux({
+      premiereVisite: true,
+      onValider: (choisis) => {
+        state.selectedAcronymes = new Set(choisis);
+        saveSelectedNiveaux();
+        setHeaderControlsVisible(true);
+        demarrer(appEl);
+      },
     });
     return;
   }
