@@ -97,8 +97,12 @@
   </div>
 
   <div class="header-row" id="mode-row">
+    <!-- Sur un écran étroit, ce libellé s'efface pour que la bascule et les
+         deux pastilles tiennent sur une ligne (ajusterLibelleAffichage, dans
+         js/app.js) : la bascule porte donc son nom en propre, pour ceux qui
+         l'atteignent au lecteur d'écran. -->
     <span class="header-row-label">Affichage</span>
-    <div class="segmented" id="mode-toggle">
+    <div class="segmented" id="mode-toggle" role="group" aria-label="Affichage">
       <span class="segment-indicator" id="mode-indicator"></span>
       <button type="button" class="segment-btn" data-mode="chapitre">Par Chapitre</button>
       <button type="button" class="segment-btn" data-mode="date">Par Date</button>

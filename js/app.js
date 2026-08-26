@@ -286,6 +286,43 @@ function repositionnerIndicateurs() {
 
 window.addEventListener("resize", repositionnerIndicateurs);
 
+/** Retire le libellé « Affichage » quand la rangée ne tient plus sur une ligne.
+ *
+ *  Sur un téléphone, la bascule Par Chapitre / Par Date et les deux pastilles
+ *  rondes réclament à elles seules presque toute la largeur : le libellé les
+ *  poussait à la ligne, et l'en-tête gagnait une rangée pour un mot que le
+ *  contenu des boutons dit déjà. Il s'efface donc, mais seulement quand il
+ *  gêne — sur un écran large il reste.
+ *
+ *  On repose la question au libellé visible à chaque fois : une fois retiré,
+ *  il ne saurait jamais que la place est revenue. Le va-et-vient tient dans
+ *  la même tâche, aucune image n'est peinte entre les deux, donc rien ne
+ *  clignote. */
+function ajusterLibelleAffichage() {
+  const header = document.querySelector(".site-header");
+  const row = document.getElementById("mode-row");
+  // Rangée masquée (choix initial) ou en-tête replié : le libellé et les
+  // pastilles ne sont pas à l'écran, il n'y a rien à arbitrer.
+  if (row.hidden || header.classList.contains("is-compact")) return;
+
+  const libelle = row.querySelector(".header-row-label");
+  const enfants = [
+    libelle,
+    document.getElementById("mode-toggle"),
+    row.querySelector(".header-tools"),
+  ];
+
+  libelle.hidden = false;
+
+  // Une rangée plus haute que son plus grand élément est une rangée qui a
+  // débordé — mesure plus sûre que de comparer des positions, les trois
+  // éléments n'ayant ni la même hauteur ni le même alignement vertical.
+  const hauteurLigne = Math.max(...enfants.map((el) => el.getBoundingClientRect().height));
+  libelle.hidden = row.getBoundingClientRect().height > hauteurLigne + 1;
+}
+
+window.addEventListener("resize", ajusterLibelleAffichage);
+
 // Les niveaux de classe tenaient autrefois une rangée entière de l'en-tête,
 // une bulle par niveau. Avec des libellés comme « Révision Première », cette
 // rangée coûtait plus de place qu'elle ne rendait de service pour un réglage
@@ -582,6 +619,9 @@ function basculerEnTete(header, versCompact) {
 
   // Après : la classe est posée, la mise en page d'arrivée est connue.
   header.classList.toggle("is-compact", versCompact);
+  // Le dépliage rend la rangée « Affichage » à sa largeur d'origine : c'est le
+  // moment de savoir si son libellé y a de nouveau sa place.
+  ajusterLibelleAffichage();
   // Les libellés des bascules viennent de changer de taille : leur pastille
   // resterait sur l'ancienne largeur.
   repositionnerIndicateurs();
@@ -1923,6 +1963,9 @@ async function demarrer(appEl) {
   initNiveauBtn();
   renderModeToggle();
   renderVideoModeToggle();
+  // Le bouton des niveaux vient peut-être d'apparaître : la rangée n'a plus la
+  // même largeur qu'au chargement de la page.
+  ajusterLibelleAffichage();
 
   appEl.innerHTML = '<p class="empty-message">Chargement…</p>';
   try {
