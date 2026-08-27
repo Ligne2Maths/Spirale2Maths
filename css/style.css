@@ -814,8 +814,8 @@ main#app {
   align-items: center;
   gap: 0.2rem;
   padding: 0.5rem 0 1.25rem;
-  /* La bande file jusqu'aux bords de l'écran : un défilement qui s'arrête à
-     une marge blanche se lit comme une fin, alors qu'il n'y en a pas. */
+  /* La bande file jusqu'aux bords de l'écran : cadrée dans la marge du
+     contenu, elle aurait l'air d'une simple liste plutôt que d'un rouleau. */
   margin-inline: -1rem;
 }
 
@@ -834,17 +834,25 @@ main#app {
   transition: background var(--transition), transform var(--transition);
 }
 
-.date-nav-arrow:hover {
+.date-nav-arrow:hover:not(:disabled) {
   background: var(--color-accent-soft);
 }
 
-.date-nav-arrow:active {
+.date-nav-arrow:active:not(:disabled) {
   transform: scale(0.92);
 }
 
-/* Bande de jours défilante. Le JS n'en garde qu'une tranche en mémoire et la
-   régénère autour du jour affiché dès que le défilement s'arrête près d'un
-   bord — voir monterBandeDates() dans js/app.js. */
+/* La bande a un premier et un dernier jour : arrivé en butée, la flèche n'a
+   plus rien à faire, et le dit. */
+.date-nav-arrow:disabled {
+  opacity: 0.3;
+  cursor: default;
+  box-shadow: none;
+}
+
+/* Bande de jours défilante. Les jours viennent du planning : la bande a donc
+   un début et une fin, et le JS pose de part et d'autre de quoi amener le
+   premier et le dernier au milieu — voir monterBandeDates() dans js/app.js. */
 .date-strip {
   flex: 1 1 auto;
   min-width: 0;
@@ -857,13 +865,35 @@ main#app {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   /* Les jours s'effacent sur les bords plutôt que d'être coupés net : c'est ce
-     qui donne à la bande son air de rouleau sans fin. */
+     qui désigne le jour du milieu comme celui qu'on a choisi. */
   -webkit-mask-image: linear-gradient(to right, transparent, #000 15%, #000 85%, transparent);
   mask-image: linear-gradient(to right, transparent, #000 15%, #000 85%, transparent);
 }
 
 .date-strip::-webkit-scrollbar {
   display: none;
+}
+
+/* Souris : la main ouverte annonce que la bande se tire, faute de quoi rien ne
+   le laisserait deviner sur un ordinateur. */
+@media (hover: hover) and (pointer: fine) {
+  .date-strip {
+    cursor: grab;
+  }
+}
+
+.date-strip.est-glissee {
+  cursor: grabbing;
+  /* Un glisser sur du texte le surlignerait en bleu tout du long. */
+  user-select: none;
+  -webkit-user-select: none;
+}
+
+/* L'aimant est suspendu le temps du glisser et de l'élan qui le suit : sinon
+   chaque position posée à la main serait aussitôt ramenée au jour le plus
+   proche, et le geste saccaderait — voir monterBandeDates() dans js/app.js. */
+.date-strip.sans-aimant {
+  scroll-snap-type: none;
 }
 
 .date-strip:focus-visible {
@@ -885,7 +915,6 @@ main#app {
 .date-item {
   flex: 0 0 auto;
   scroll-snap-align: center;
-  position: relative;
   /* Largeur figée : les points de calage restent régulièrement espacés, et le
      jour courant peut grossir sans décaler ses voisins — d'où un `transform`
      plutôt qu'une taille de police, qui, elle, referait la mise en page à
@@ -916,31 +945,14 @@ main#app {
   box-shadow: var(--shadow-sm);
 }
 
-/* Repère visuel du jour actuel de la machine, distinct de la date affichée
-   (qui peut être différente une fois qu'on a navigué). */
-.date-item.is-today {
+/* Repère : le prochain jour de cours à préparer, celui sur lequel la bande
+   s'ouvre. Reste souligné une fois qu'on a navigué ailleurs, pour qu'on sache
+   toujours d'où l'on vient. */
+.date-item.is-repere {
   text-decoration: underline;
   text-decoration-color: currentColor;
   text-decoration-thickness: 2.5px;
   text-underline-offset: 3px;
-}
-
-/* Point sous les jours où au moins un niveau coché a des savoir-faire prévus :
-   sans lui, rien ne distinguerait les semaines pleines des semaines vides. */
-.date-item.has-content::after {
-  content: "";
-  position: absolute;
-  left: 50%;
-  bottom: 0.3rem;
-  width: 4px;
-  height: 4px;
-  margin-left: -2px;
-  border-radius: 50%;
-  background: var(--color-accent);
-}
-
-.date-item.current.has-content::after {
-  background: rgba(255, 255, 255, 0.85);
 }
 
 /* Contrôle invisible dont le seul rôle est de provoquer le retour haptique

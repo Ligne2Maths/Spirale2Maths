@@ -23,7 +23,9 @@ const state = {
   mode: "date",
   videoMode: "nopub",       // "ytb" (lecteur YouTube classique) | "nopub" (iframe Digiview, sans pub)
   validations: {},          // { acronyme: { code: { n: { dateISO: true|false } } } } — une entrée par date où le niveau a été fait
-  selectedDate: startOfToday(),
+  // Posé au premier rendu du mode Date seulement : les jours proposés sortent
+  // du planning, qui n'est pas encore chargé ici — voir renderDateMode().
+  selectedDate: null,
   openLevels: new Map(),    // `${acronyme}::${code}::${n}` -> "open" | "split" (transitoire)
 };
 
@@ -913,19 +915,26 @@ function tickHaptique() {
 
 /* ---------- Bande de dates défilante ---------- */
 
-// Jours engendrés de part et d'autre du jour central. Assez large pour qu'un
-// lancer de doigt, même vif, n'atteigne jamais le bord : la piste n'est donc
-// régénérée qu'une fois le défilement arrêté, sans jamais couper l'élan.
-const JOURS_TAMPON = 60;
-
-// En deçà de cette distance au bord, la piste est reconstruite autour du jour
-// affiché. C'est ce recentrage, invisible, qui rend le défilement sans fin.
-const MARGE_RECENTRAGE = 25;
-
 // Délai sans le moindre événement de défilement au-delà duquel on considère
 // que la bande s'est arrêtée. `scrollend` ferait l'affaire mais manque encore
 // à l'appel sur les Safari un peu anciens.
 const DELAI_ARRET_MS = 140;
+
+// Déplacement du pointeur en deçà duquel un appui reste un clic : sans cette
+// zone morte, la moindre tremblante de la main sur un jour l'empêcherait
+// d'être choisi.
+const SEUIL_GLISSE_PX = 4;
+
+// Durée, en millisecondes, sur laquelle on prolonge la vitesse du pointeur au
+// lâcher pour deviner le jour visé. Réglée à l'oreille : assez pour qu'un
+// geste vif franchisse la semaine, assez peu pour qu'un petit coup ne parte
+// pas à l'autre bout du planning.
+const ELAN_MS = 180;
+
+// Au-delà de ce temps mort avant le lâcher, le pointeur est considéré comme
+// arrêté : une vitesse mesurée il y a longtemps ne dit plus rien de
+// l'intention, et prolonger l'élan enverrait la bande à l'aventure.
+const ELAN_PERIME_MS = 100;
 
 function libelleDateComplet(date) {
   return date.toLocaleDateString("fr-FR", {
@@ -936,16 +945,39 @@ function libelleDateComplet(date) {
   });
 }
 
-// Au moins un des niveaux cochés a-t-il des savoir-faire prévus ce jour-là ?
-// Sert à poser un point sous la date : sans repère, faire défiler des semaines
-// de jours vides n'aurait pas de sens.
-function jourPlanifie(iso) {
+function dateDepuisISO(iso) {
+  const [y, m, d] = iso.split("-").map(Number);
+  return new Date(y, m - 1, d);
+}
+
+/** Jours, triés, où au moins un des niveaux cochés a des savoir-faire prévus.
+ *
+ *  Le tableur fait seul la liste : un jour sans rien n'aurait rien à montrer,
+ *  et c'est ce qui donne à la bande un début et une fin plutôt qu'un rouleau
+ *  sans fin de cases vides. */
+function joursPlanifies() {
+  const isos = new Set();
   for (const acronyme of state.selectedAcronymes) {
     const data = state.niveauxData.get(acronyme);
-    const codes = data && data.planning.get(iso);
-    if (codes && codes.size) return true;
+    if (!data) continue;
+    for (const [iso, codes] of data.planning) {
+      if (codes && codes.size) isos.add(iso);
+    }
   }
-  return false;
+  // Les dates ISO se rangent dans l'ordre chronologique par simple tri de
+  // chaînes : « 2026-09-02 » vient bien après « 2026-08-31 ».
+  return [...isos].sort().map(dateDepuisISO);
+}
+
+/** Index, dans `jours`, du jour servant de repère.
+ *
+ *  Le site sert à préparer le cours suivant : le repère est donc le prochain
+ *  jour prévu — demain au plus tôt — et non la date du jour. Faute de jour à
+ *  venir (fin d'année, planning épuisé), on se rabat sur le dernier connu. */
+function indexJourRepere(jours) {
+  const demain = toISODate(addDays(startOfToday(), 1));
+  const i = jours.findIndex((j) => toISODate(j) >= demain);
+  return i === -1 ? jours.length - 1 : i;
 }
 
 /** Monte la bande de jours défilante dans `container`.
@@ -956,9 +988,11 @@ function jourPlanifie(iso) {
  *  instant visible calée sur son premier jour.
  *
  *  @param {HTMLElement} container conteneur, déjà présent dans le document.
+ *  @param {Date[]} jours les jours à proposer, dans l'ordre chronologique.
+ *  @param {number} indexRepere index, dans `jours`, du jour souligné.
  *  @param {(date: Date) => void} onJourChoisi appelé quand le défilement
  *         s'immobilise sur un jour différent de celui affiché. */
-function monterBandeDates(container, onJourChoisi) {
+function monterBandeDates(container, jours, indexRepere, onJourChoisi) {
   const nav = document.createElement("div");
   nav.className = "date-nav";
 
@@ -972,44 +1006,40 @@ function monterBandeDates(container, onJourChoisi) {
   piste.className = "date-strip-track";
   bande.appendChild(piste);
 
-  const todayIso = toISODate(startOfToday());
+  const isos = jours.map(toISODate);
 
-  let centreTampon = state.selectedDate; // jour au milieu de la piste
   let jourAffiche = state.selectedDate; // jour actuellement sous le repère central
   let elCourant = null;
-  let milieux = []; // abscisse du centre de chaque jour, mesurée une fois par piste
+  let milieux = []; // abscisse du centre de chaque jour, remesurée à chaque changement de géométrie
 
-  const dateDeIndex = (i) => addDays(centreTampon, i - JOURS_TAMPON);
-  const indexDeDate = (date) =>
-    JOURS_TAMPON + Math.round((date - centreTampon) / 86400000);
+  const indexDeDate = (date) => isos.indexOf(toISODate(date));
 
-  function creerItem(date) {
+  function creerItem(date, i) {
     const el = document.createElement("button");
     el.type = "button";
     el.className = "date-item";
-    el.dataset.iso = toISODate(date);
+    el.dataset.iso = isos[i];
     el.textContent = formatDateShort(date);
     el.setAttribute("role", "option");
     el.setAttribute("aria-label", libelleDateComplet(date));
-    // Cent vingt et un boutons dans l'ordre de tabulation seraient un piège au
+    // Une année de boutons dans l'ordre de tabulation serait un piège au
     // clavier : c'est la bande qui reçoit le focus, et les flèches naviguent.
     el.tabIndex = -1;
-    if (el.dataset.iso === todayIso) el.classList.add("is-today");
-    if (jourPlanifie(el.dataset.iso)) el.classList.add("has-content");
-    el.addEventListener("click", () => centrerSur([...piste.children].indexOf(el), true));
+    if (i === indexRepere) el.classList.add("is-repere");
+    el.addEventListener("click", () => centrerSur(i, true));
     return el;
   }
 
-  function remplir(centre) {
-    centreTampon = centre;
-    elCourant = null;
-    piste.replaceChildren(
-      ...Array.from({ length: JOURS_TAMPON * 2 + 1 }, (_, i) =>
-        creerItem(addDays(centre, i - JOURS_TAMPON))
-      )
-    );
-    milieux = []; // invalidé, remesuré à la prochaine lecture
-    marquerCourant();
+  piste.replaceChildren(...jours.map(creerItem));
+
+  // Le premier et le dernier jour doivent pouvoir venir au milieu de la bande :
+  // sans ces marges, le défilement s'arrêterait avant de les y amener, et les
+  // deux bouts du planning resteraient à jamais hors du repère central.
+  function ajusterMarges() {
+    const premier = piste.firstElementChild;
+    if (!premier || !bande.clientWidth) return;
+    const demiVide = Math.max(0, (bande.clientWidth - premier.offsetWidth) / 2);
+    piste.style.paddingInline = `${demiVide}px`;
   }
 
   // Abscisse du centre de chaque jour dans le contenu défilable. `offsetLeft`
@@ -1035,12 +1065,11 @@ function monterBandeDates(container, onJourChoisi) {
     }
   }
 
-  // Jour dont le centre est le plus proche du milieu de la bande. Recherche
-  // dichotomique : `milieux` est croissant, et la fonction est appelée à chaque
-  // image de défilement.
-  function indexCentral() {
+  // Jour dont le centre est le plus proche d'une abscisse donnée du contenu
+  // défilable. Recherche dichotomique : `milieux` est croissant, et la
+  // fonction est appelée à chaque image de défilement.
+  function indexLePlusProche(cible) {
     if (!milieux.length) mesurer();
-    const cible = bande.scrollLeft + bande.clientWidth / 2;
 
     let bas = 0;
     let haut = milieux.length - 1;
@@ -1055,18 +1084,29 @@ function monterBandeDates(container, onJourChoisi) {
     return bas;
   }
 
+  const indexCentral = () => indexLePlusProche(bande.scrollLeft + bande.clientWidth / 2);
+
   function centrerSur(index, doux) {
-    if (index < 0 || index >= piste.children.length) return;
     if (!milieux.length) mesurer();
+    const i = Math.min(Math.max(index, 0), milieux.length - 1);
     bande.scrollTo({
-      left: milieux[index] - bande.clientWidth / 2,
+      left: milieux[i] - bande.clientWidth / 2,
       behavior: doux ? "smooth" : "auto",
     });
   }
 
+  // La bande a désormais un début et une fin : les flèches doivent le dire,
+  // sans quoi on cliquerait dans le vide une fois en butée.
+  function majFleches(index) {
+    btnPrev.disabled = index <= 0;
+    btnNext.disabled = index >= jours.length - 1;
+  }
+
   function surDefilement() {
-    const date = dateDeIndex(indexCentral());
-    if (toISODate(date) === toISODate(jourAffiche)) return;
+    const index = indexCentral();
+    majFleches(index);
+    const date = jours[index];
+    if (!date || toISODate(date) === toISODate(jourAffiche)) return;
     jourAffiche = date;
     marquerCourant();
     tickHaptique();
@@ -1077,25 +1117,20 @@ function monterBandeDates(container, onJourChoisi) {
     // d'animation ne sont pas rendues quand l'onglet passe à l'arrière-plan,
     // alors que cette minuterie, elle, se déclenche quand même.
     surDefilement();
-
-    const index = indexCentral();
-
-    // Approche d'un bord : on reconstruit la piste autour du jour affiché, en
-    // replaçant le défilement pile au même endroit à l'écran pour que la
-    // substitution passe inaperçue. Fait à l'arrêt seulement — toucher à
-    // scrollLeft pendant l'élan le stopperait net.
-    if (index < MARGE_RECENTRAGE || index > piste.children.length - 1 - MARGE_RECENTRAGE) {
-      const decalageEcran = milieux[index] - bande.scrollLeft;
-      remplir(jourAffiche);
-      mesurer();
-      bande.scrollLeft = milieux[JOURS_TAMPON] - decalageEcran;
-    }
-
+    // L'aimant, suspendu le temps d'un glisser à la souris, reprend son office
+    // une fois la bande immobile : le rétablir plus tôt couperait net le
+    // défilement doux qui suit le lâcher.
+    bande.classList.remove("sans-aimant");
     if (toISODate(jourAffiche) !== toISODate(state.selectedDate)) onJourChoisi(jourAffiche);
   }
 
   let rafDefilement = null;
   let minuterieArret = null;
+
+  function armerArret() {
+    clearTimeout(minuterieArret);
+    minuterieArret = setTimeout(surArret, DELAI_ARRET_MS);
+  }
 
   bande.addEventListener(
     "scroll",
@@ -1106,8 +1141,7 @@ function monterBandeDates(container, onJourChoisi) {
           surDefilement();
         });
       }
-      clearTimeout(minuterieArret);
-      minuterieArret = setTimeout(surArret, DELAI_ARRET_MS);
+      armerArret();
     },
     { passive: true }
   );
@@ -1118,6 +1152,101 @@ function monterBandeDates(container, onJourChoisi) {
     e.preventDefault();
     centrerSur(indexCentral() + pas, true);
   });
+
+  /* --- Glisser à la souris ---
+     Le doigt fait déjà défiler la bande ; sur un ordinateur il ne restait que
+     les flèches. On rejoue donc le geste tactile : on suit le pointeur, puis
+     on prolonge son élan jusqu'au jour visé. L'aimant (scroll-snap) est
+     suspendu pendant le geste, sinon chaque position posée à la main serait
+     aussitôt ramenée au jour le plus proche et le glisser saccaderait. */
+  let glisse = null;
+  let glisseAboutie = false; // un vrai déplacement a eu lieu : le clic qui suit n'en est pas un
+
+  bande.addEventListener("pointerdown", (e) => {
+    glisseAboutie = false;
+    // Doigt et stylet font déjà défiler la bande d'eux-mêmes : les suivre en
+    // plus doublerait chaque geste. Seule la souris, elle, n'a rien.
+    if (e.pointerType !== "mouse" || e.button !== 0) return;
+    glisse = {
+      id: e.pointerId,
+      xDepart: e.clientX,
+      scrollDepart: bande.scrollLeft,
+      dernierX: e.clientX,
+      dernierT: e.timeStamp,
+      vitesse: 0, // px de défilement par ms, positive vers la droite
+      active: false,
+    };
+  });
+
+  bande.addEventListener("pointermove", (e) => {
+    if (!glisse || e.pointerId !== glisse.id) return;
+
+    // Bouton relâché hors de la page, avant que la capture n'ait pris : le
+    // pointerup ne nous est jamais parvenu. Sans ce garde-fou, la bande
+    // suivrait ensuite la souris à vide, sans qu'on appuie sur rien.
+    if (!(e.buttons & 1)) {
+      finDeGlisse(e);
+      return;
+    }
+
+    const dx = e.clientX - glisse.xDepart;
+
+    if (!glisse.active) {
+      if (Math.abs(dx) < SEUIL_GLISSE_PX) return;
+      glisse.active = true;
+      // La capture garde le geste vivant même si le pointeur sort de la bande.
+      bande.setPointerCapture(e.pointerId);
+      bande.classList.add("est-glissee", "sans-aimant");
+    }
+
+    e.preventDefault(); // sinon le navigateur amorce une sélection de texte
+    bande.scrollLeft = glisse.scrollDepart - dx;
+
+    // Vitesse lissée : une seule paire d'événements suffirait à la fausser
+    // (un temps mort de la souris, une image sautée).
+    const dt = e.timeStamp - glisse.dernierT;
+    if (dt > 0) {
+      glisse.vitesse = glisse.vitesse * 0.7 + ((glisse.dernierX - e.clientX) / dt) * 0.3;
+      glisse.dernierX = e.clientX;
+      glisse.dernierT = e.timeStamp;
+    }
+  });
+
+  function finDeGlisse(e) {
+    if (!glisse || e.pointerId !== glisse.id) return;
+    const geste = glisse;
+    glisse = null;
+    if (!geste.active) return; // simple clic : le jour cliqué s'en charge
+
+    glisseAboutie = true;
+    bande.classList.remove("est-glissee");
+
+    // Le pointeur a pu s'immobiliser avant le lâcher : on ne prolonge que les
+    // gestes encore en mouvement.
+    const arrete = e.timeStamp - geste.dernierT > ELAN_PERIME_MS;
+    const elan = arrete ? 0 : geste.vitesse * ELAN_MS;
+    centrerSur(indexLePlusProche(bande.scrollLeft + elan + bande.clientWidth / 2), true);
+
+    // Garantit le passage par surArret() — donc le retour de l'aimant — même
+    // si la bande était déjà pile en place et que rien ne défile.
+    armerArret();
+  }
+
+  bande.addEventListener("pointerup", finDeGlisse);
+  bande.addEventListener("pointercancel", finDeGlisse);
+
+  // Un glisser se termine sur un jour quelconque : sans ce filtre, le lâcher
+  // vaudrait clic et ramènerait la bande sur ce jour-là.
+  bande.addEventListener(
+    "click",
+    (e) => {
+      if (!glisseAboutie) return;
+      glisseAboutie = false;
+      e.preventDefault();
+      e.stopPropagation();
+    },
+    true
+  );
 
   const btnPrev = document.createElement("button");
   btnPrev.type = "button";
@@ -1133,13 +1262,16 @@ function monterBandeDates(container, onJourChoisi) {
   btnNext.setAttribute("aria-label", "Jour suivant");
   btnNext.addEventListener("click", () => centrerSur(indexCentral() + 1, true));
 
-  remplir(state.selectedDate);
+  marquerCourant();
   nav.append(btnPrev, bande, btnNext);
   container.appendChild(nav);
 
   // Dans la page : mesurable, donc centrable tout de suite.
+  ajusterMarges();
   mesurer();
-  centrerSur(JOURS_TAMPON, false);
+  const indexDepart = Math.max(indexDeDate(state.selectedDate), 0);
+  centrerSur(indexDepart, false);
+  majFleches(indexDepart);
 
   // Le centre de la bande se déplace avec sa largeur (rotation de l'écran,
   // fenêtre redimensionnée) : il faut alors replacer le jour affiché. Un
@@ -1147,19 +1279,44 @@ function monterBandeDates(container, onJourChoisi) {
   // avec la bande au lieu de s'accumuler à chaque rendu.
   new ResizeObserver(() => {
     if (!bande.clientWidth) return;
+    ajusterMarges();
     mesurer();
     centrerSur(indexDeDate(jourAffiche), false);
   }).observe(bande);
 }
 
 function renderDateMode(container) {
+  const jours = joursPlanifies();
+
+  // Plus de jours vides dans la bande : quand le planning n'en donne aucun,
+  // il n'y a pas non plus de bande à monter.
+  if (!jours.length) {
+    const p = document.createElement("p");
+    p.className = "empty-message";
+    p.textContent = state.selectedAcronymes.size
+      ? "Aucune date au planning."
+      : "Sélectionnez au moins un niveau de classe.";
+    container.appendChild(p);
+    return;
+  }
+
+  const indexRepere = indexJourRepere(jours);
+
+  // Le jour affiché doit exister dans la bande : au tout premier rendu comme
+  // après un changement de niveaux, on retombe sur le repère dès que la date
+  // en cours n'est plus au programme.
+  const isos = jours.map(toISODate);
+  if (!state.selectedDate || !isos.includes(toISODate(state.selectedDate))) {
+    state.selectedDate = jours[indexRepere];
+  }
+
   const contenu = document.createElement("div");
   contenu.className = "date-contenu";
 
   // La bande n'est construite qu'une fois : faire défiler les jours ne doit
   // reconstruire que le contenu en dessous, sinon la position de la bande —
   // et l'élan du doigt — seraient perdus à chaque date franchie.
-  monterBandeDates(container, (date) => {
+  monterBandeDates(container, jours, indexRepere, (date) => {
     state.selectedDate = date;
     state.openLevels.clear(); // change de jour = on repart avec toutes les vidéos fermées
     renderContenuDate(contenu);
