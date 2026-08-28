@@ -780,6 +780,25 @@ main#app {
   border-bottom: 1px solid var(--color-border);
 }
 
+/* Passé la largeur de la colonne de contenu, le chapitre ne touche plus les
+   bords de la fenêtre : du fond de page apparaît de part et d'autre, et ses
+   côtés se ferment du même trait que son haut et son bas. Sur un téléphone il
+   file d'un bord à l'autre, et ces deux traits ne seraient que deux pixels
+   perdus contre le cadre de l'écran.
+
+   Le seuil n'est pas les 900 px de `main#app` mais 918 : une requête de média
+   mesure la fenêtre barre de défilement comprise, alors que la colonne, elle,
+   se règle sur la place qui reste une fois la barre déduite. À 902 px de
+   fenêtre, la colonne n'en fait encore que 887 et touche les bords — les deux
+   traits s'y poseraient contre le cadre. On garde donc de quoi couvrir la plus
+   large des barres classiques (17 px sous Windows). Si les 900 px de la
+   colonne changent, ce nombre suit. */
+@media (min-width: 918px) {
+  .chapitre {
+    border-inline: 1px solid var(--color-border);
+  }
+}
+
 .chapitre > summary {
   cursor: pointer;
   /* Le retrait est posé ici plutôt que sur le chapitre : la teinte du survol
