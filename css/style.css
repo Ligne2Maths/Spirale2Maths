@@ -758,33 +758,51 @@ main#app {
 
 /* ---------- Mode Chapitre ---------- */
 
-.chapitre {
-  background: var(--color-surface);
-  border: 1px solid var(--color-border);
-  border-radius: var(--radius);
-  margin-bottom: 0.85rem;
-  overflow: hidden;
-  box-shadow: var(--shadow-sm);
-  transition: box-shadow var(--transition);
-}
+/* Le chapitre était une carte, et les cartes de SF venaient s'y loger : deux
+   bordures et deux marges intérieures imbriquées reprenaient 36 px aux SF, de
+   quoi faire tomber le troisième bouton de niveau à la ligne sur un écran de
+   375 px.
 
-.chapitre:hover {
-  box-shadow: var(--shadow-md);
+   Il reste un bloc d'un seul tenant — son fond porte le titre comme les SF
+   qu'il déplie — mais il traverse la page au lieu de s'y poser : il sort de la
+   marge du contenu pour atteindre les bords de l'écran, et ce sont la bande de
+   titre et le corps qui la reprennent chacun en marge intérieure. Les SF
+   s'alignent ainsi sur la marge de la page, à la largeur qu'ils ont en mode
+   Date, sans plus rien perdre à l'emboîtement.
+
+   Les `env()` valent 0 hors app installée ; en paysage sur un iPhone, ils
+   empêchent l'encoche de mordre sur le contenu. */
+.chapitre {
+  margin-inline: calc(-1rem - env(safe-area-inset-left)) calc(-1rem - env(safe-area-inset-right));
+  margin-bottom: 1.1rem;
+  background: var(--color-surface);
+  border-top: 1px solid var(--color-border);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .chapitre > summary {
   cursor: pointer;
-  padding: 0.9rem 1.1rem;
+  /* Le retrait est posé ici plutôt que sur le chapitre : la teinte du survol
+     doit filer jusqu'aux bords de l'écran, comme le fond qu'elle recouvre. */
+  padding: 0.9rem calc(1rem + env(safe-area-inset-right)) 0.9rem
+    calc(1rem + env(safe-area-inset-left));
   font-weight: 700;
   list-style: none;
   display: flex;
   align-items: center;
   justify-content: space-between;
+  gap: 0.6rem;
   transition: background var(--transition);
 }
 
 .chapitre > summary:hover {
   background: var(--color-accent-soft);
+}
+
+/* Déplié, un trait sépare le titre de ce qu'il coiffe ; replié, la bordure du
+   chapitre ferme déjà le bloc. */
+.chapitre[open] > summary {
+  border-bottom: 1px solid var(--color-border);
 }
 
 .chapitre > summary::-webkit-details-marker {
@@ -793,6 +811,7 @@ main#app {
 
 .chapitre > summary::after {
   content: "▸";
+  flex: 0 0 auto;
   color: var(--color-accent);
   font-size: 1.1rem;
   transition: transform 0.2s ease;
@@ -802,9 +821,11 @@ main#app {
   transform: rotate(90deg);
 }
 
+/* La marge du contenu, reprise ici : les cartes de SF s'alignent sur celles du
+   mode Date, et le fond du chapitre les porte de bord à bord. */
 .chapitre-body {
-  padding: 0.25rem 1.1rem 1.1rem;
-  border-top: 1px solid var(--color-border);
+  padding: 0.85rem calc(1rem + env(safe-area-inset-right)) 0.85rem
+    calc(1rem + env(safe-area-inset-left));
 }
 
 /* ---------- Mode Date ---------- */
@@ -1035,7 +1056,7 @@ main#app {
 }
 
 .chapitre-body .sf-card {
-  margin-top: 0.85rem;
+  margin-top: 0;
   margin-bottom: 0;
 }
 
