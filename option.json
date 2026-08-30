@@ -25,17 +25,17 @@
     {
       "acronyme": "Révision Première",
       "ordre": 3,
-      "fichier": "contenu/Premiere.xlsx",
+      "fichier": "contenu/Revision Premiere.xlsx",
       "chapitres": {
-        "1": "Mu",
-        "2": "Di",
-        "3": "Le"
+        "1": "Suites",
+        "2": "",
+        "3": ""
       }
     },
 	{
       "acronyme": "3e",
       "ordre": 1,
-      "fichier": "contenu/Premiere.xlsx",
+      "fichier": "contenu/Base.xlsx",
       "chapitres": {
         "1": "Multiplication"
       }
@@ -43,7 +43,7 @@
 	{
       "acronyme": "Seconde",
       "ordre": 2,
-      "fichier": "contenu/Premiere.xlsx",
+      "fichier": "contenu/Base.xlsx",
       "chapitres": {
         "1": "Multiplication"
       }

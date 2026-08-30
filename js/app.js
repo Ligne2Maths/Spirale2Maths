@@ -18,6 +18,7 @@ const MOIS_FR = NOMS_MOIS_FR.map(abregeMois);
 
 const state = {
   optionData: null,
+  optionEmpreinte: null,    // empreinte du option.json lu — voir rafraichirContenu()
   niveauxData: new Map(),   // acronyme -> { config, sfList, planning, chapitresList }
   selectedAcronymes: new Set(),
   mode: "date",
@@ -227,6 +228,27 @@ function parsePlanning(rows) {
   return map;
 }
 
+/** Empreinte du contenu reçu (FNV-1a 32 bits) : c'est elle, et non les en-têtes
+ *  HTTP, qui dit si un fichier a bougé depuis la dernière lecture. Le serveur de
+ *  développement n'envoie pas les mêmes en-têtes que GitHub Pages, et une
+ *  réponse resservie par le service worker porte celles du jour où elle a été
+ *  mise en cache. Voir rafraichirContenu(). */
+function empreinte(donnees) {
+  const octets =
+    typeof donnees === "string" ? new TextEncoder().encode(donnees) : new Uint8Array(donnees);
+  let h = 0x811c9dc5;
+  for (let i = 0; i < octets.length; i++) h = Math.imul(h ^ octets[i], 0x01000193);
+  return h >>> 0;
+}
+
+// Lu en texte plutôt qu'en JSON : l'empreinte se calcule sur ce qui a été reçu.
+async function chargerOption() {
+  const res = await fetch("option.json", { cache: "no-store" });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const texte = await res.text();
+  return { data: JSON.parse(texte), empreinte: empreinte(texte) };
+}
+
 async function loadNiveauData(niveauConfig) {
   // cache: "no-store" : le tableur est modifié régulièrement (ajout de niveaux,
   // de SF...) et on veut toujours la dernière version au rechargement, pas une
@@ -250,7 +272,7 @@ async function loadNiveauData(niveauConfig) {
     nom: (niveauConfig.chapitres && niveauConfig.chapitres[String(num)]) || `Chapitre ${num}`,
   }));
 
-  return { config: niveauConfig, sfList, planning, chapitresList };
+  return { config: niveauConfig, sfList, planning, chapitresList, empreinte: empreinte(buf) };
 }
 
 async function ensureNiveauLoaded(acronyme) {
@@ -840,6 +862,9 @@ function renderChapitreMode(container) {
       niveauData.chapitresList.forEach((ch) => {
         const details = document.createElement("details");
         details.className = "chapitre";
+        // Repère stable pour reposer les chapitres dépliés après un
+        // rafraîchissement du contenu — voir redessinerEnPreservantLaVue().
+        details.dataset.cle = `${acronyme}::${ch.num}`;
 
         const summary = document.createElement("summary");
         summary.textContent = `Chapitre ${ch.num} — ${ch.nom}`;
@@ -2114,6 +2139,99 @@ function setHeaderControlsVisible(visible) {
   document.getElementById("video-mode-toggle").hidden = !visible;
 }
 
+/* ---------- Rafraîchissement du contenu au retour au premier plan ---------- */
+
+// Le contenu pédagogique change sans que le site soit redéployé : remplacer un
+// classeur dans /contenu suffit. Une page déjà ouverte, elle, garde en mémoire
+// ce qu'elle a lu au chargement (state.niveauxData) et ne redemande plus rien.
+// L'app installée sur un téléphone, qui survit des jours en arrière-plan,
+// pourrait ainsi afficher indéfiniment un planning périmé.
+//
+// On redemande donc les fichiers quand l'app revient au premier plan, mais
+// seulement après une absence assez longue pour qu'un changement soit
+// plausible : basculer trois secondes vers une autre app ne doit rien
+// déclencher.
+const DELAI_AVANT_RAFRAICHISSEMENT_MS = 30 * 60 * 1000; // 30 minutes
+
+let dernierChargement = Date.now();
+let rafraichissementEnCours = false;
+
+/** Rendu complet, mais sans faire perdre sa place au lecteur : render() repart
+ *  de zéro, donc referme les chapitres dépliés et remonte la page en haut.
+ *  Passe encore au chargement ; brutal pour quelqu'un qui vient de retrouver
+ *  son écran. */
+function redessinerEnPreservantLaVue() {
+  const appEl = document.getElementById("app");
+  const ouverts = new Set(
+    [...appEl.querySelectorAll("details.chapitre[open]")].map((d) => d.dataset.cle)
+  );
+  const defilement = window.scrollY;
+
+  render();
+
+  appEl.querySelectorAll("details.chapitre").forEach((d) => {
+    if (ouverts.has(d.dataset.cle)) d.open = true;
+  });
+  window.scrollTo(0, defilement);
+}
+
+/** Relit option.json et les classeurs déjà chargés, et ne redessine que si
+ *  quelque chose a réellement bougé — le cas ordinaire étant qu'il n'y ait rien
+ *  de neuf, et donc rien à déranger à l'écran.
+ *
+ *  Tout est relu avant qu'on ne touche à l'état : un fichier qui manque à
+ *  l'appel ne doit pas laisser la page moitié à jour, moitié périmée. */
+async function rafraichirContenu() {
+  if (rafraichissementEnCours) return;
+  rafraichissementEnCours = true;
+  try {
+    const option = await chargerOption();
+    if (!option.data.niveaux || !option.data.niveaux.length) return;
+
+    // Un niveau affiché que le nouveau option.json ne connaît plus : on ne
+    // saurait pas quoi mettre à sa place sans refaire le choix de
+    // l'utilisateur. On laisse la page en l'état, un rechargement complet s'en
+    // chargera.
+    const connus = new Map(option.data.niveaux.map((n) => [n.acronyme, n]));
+    const charges = [...state.niveauxData.keys()];
+    if (charges.some((a) => !connus.has(a))) return;
+
+    const relus = await Promise.all(charges.map((a) => loadNiveauData(connus.get(a))));
+    dernierChargement = Date.now();
+
+    const change =
+      option.empreinte !== state.optionEmpreinte ||
+      relus.some((data, i) => data.empreinte !== state.niveauxData.get(charges[i]).empreinte);
+    if (!change) return;
+
+    state.optionData = option.data;
+    state.optionEmpreinte = option.empreinte;
+    relus.forEach((data, i) => state.niveauxData.set(charges[i], data));
+
+    redessinerEnPreservantLaVue();
+  } catch (_) {
+    // Réseau absent, fichier illisible : on garde ce qui est affiché.
+    // dernierChargement n'a pas bougé, donc on retentera au prochain retour.
+  } finally {
+    rafraichissementEnCours = false;
+  }
+}
+
+function rafraichirSiNecessaire() {
+  if (document.visibilityState !== "visible") return;
+  if (!state.optionData || !state.niveauxData.size) return; // rien encore affiché
+  if (Date.now() - dernierChargement < DELAI_AVANT_RAFRAICHISSEMENT_MS) return;
+  rafraichirContenu();
+}
+
+document.addEventListener("visibilitychange", rafraichirSiNecessaire);
+
+// Un onglet restauré depuis le cache de navigation arrière/avant (iOS surtout)
+// reprend tel qu'il a été quitté, sans forcément repasser par visibilitychange.
+window.addEventListener("pageshow", (event) => {
+  if (event.persisted) rafraichirSiNecessaire();
+});
+
 /* ---------- Démarrage ---------- */
 
 async function demarrer(appEl) {
@@ -2132,6 +2250,7 @@ async function demarrer(appEl) {
     return;
   }
 
+  dernierChargement = Date.now();
   render();
 }
 
@@ -2144,15 +2263,15 @@ async function boot() {
   // n'a encore rien choisi, et le réglage du système fait seul la loi.
   initThemeToggle();
   surveillerDefilementPage();
-  let optionData;
+  let option;
   try {
-    const res = await fetch("option.json", { cache: "no-store" });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    optionData = await res.json();
+    option = await chargerOption();
   } catch (err) {
     appEl.innerHTML = `<p class="empty-message">Impossible de charger option.json (${err.message}).</p>`;
     return;
   }
+
+  const optionData = option.data;
 
   if (!optionData.niveaux || !optionData.niveaux.length) {
     appEl.innerHTML = '<p class="empty-message">Aucun niveau de classe configuré dans option.json.</p>';
@@ -2160,6 +2279,7 @@ async function boot() {
   }
 
   state.optionData = optionData;
+  state.optionEmpreinte = option.empreinte;
   const acronymes = optionData.niveaux.map((n) => n.acronyme);
 
   loadPersistedGlobalState(acronymes);
