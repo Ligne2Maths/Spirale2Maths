@@ -35,17 +35,17 @@
 	{
       "acronyme": "3e",
       "ordre": 1,
-      "fichier": "contenu/Base.xlsx",
+      "fichier": "contenu/Troisieme.xlsx",
       "chapitres": {
-        "1": "Multiplication"
+        "1": "Proportionnalité"
       }
     },
 	{
       "acronyme": "Seconde",
       "ordre": 2,
-      "fichier": "contenu/Base.xlsx",
+      "fichier": "contenu/Seconde.xlsx",
       "chapitres": {
-        "1": "Multiplication"
+        "1": "Ensembles de Nombre"
       }
     }
   ]

@@ -121,12 +121,15 @@
     );
   }
 
-  function estIOS() {
+  function estIPad() {
     const ua = window.navigator.userAgent;
     // Depuis iPadOS 13, un iPad se présente comme un Mac : le seul indice
     // fiable est la présence d'un écran tactile.
-    const iPadOS = /Macintosh/.test(ua) && window.navigator.maxTouchPoints > 1;
-    return /iPad|iPhone|iPod/.test(ua) || iPadOS;
+    return /iPad/.test(ua) || (/Macintosh/.test(ua) && window.navigator.maxTouchPoints > 1);
+  }
+
+  function estIOS() {
+    return estIPad() || /iPhone|iPod/.test(window.navigator.userAgent);
   }
 
   function estSafari() {
@@ -198,20 +201,11 @@
 
   /* ---------- Installation : iPhone et iPad ---------- */
 
-  // Safari n'implémente ni `beforeinstallprompt` ni aucune API d'installation :
-  // la seule voie est le menu Partager. On décrit donc le geste.
-  // `forcee` : demande explicite de l'utilisateur (clic sur le logo). Elle
-  // passe outre le délai de trente jours — refuser la bannière ne doit pas
-  // condamner l'installation à quelqu'un qui la réclame ensuite.
-  function proposerInstallationIOS(forcee) {
-    if (estInstallee() || (!forcee && propositionRecemmentRefusee())) return;
-
-    const texte = document.createElement("span");
-    texte.className = "pwa-ios-steps";
-    texte.append("Appuyez sur ");
-
-    // Le glyphe « Partager » d'iOS n'existe dans aucune police standard :
-    // le dessiner évite un carré vide sur les appareils qui ne l'ont pas.
+  // Les glyphes d'iOS n'existent dans aucune police standard : les dessiner
+  // évite le carré vide des caractères manquants. Ils restent `aria-hidden` —
+  // la phrase nomme les deux commandes, elle se suffit à elle-même à la
+  // lecture vocale.
+  function iconeIOS(chemins) {
     const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
     svg.setAttribute("class", "pwa-ios-icon");
     svg.setAttribute("viewBox", "0 0 24 24");
@@ -222,14 +216,50 @@
     svg.setAttribute("stroke-linejoin", "round");
     svg.setAttribute("aria-hidden", "true");
 
-    const boite = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    boite.setAttribute("d", "M7 11v9a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-9");
-    const fleche = document.createElementNS("http://www.w3.org/2000/svg", "path");
-    fleche.setAttribute("d", "M12 15V3m0 0L8.5 6.5M12 3l3.5 3.5");
-    svg.append(boite, fleche);
+    chemins.forEach((d) => {
+      const trace = document.createElementNS("http://www.w3.org/2000/svg", "path");
+      trace.setAttribute("d", d);
+      svg.appendChild(trace);
+    });
+    return svg;
+  }
 
-    texte.appendChild(svg);
-    texte.append(" en bas de l'écran, puis « Sur l'écran d'accueil ».");
+  // Partager : une boîte ouverte d'où s'échappe une flèche vers le haut.
+  const ICONE_PARTAGER = [
+    "M7 11v9a1 1 0 0 0 1 1h8a1 1 0 0 0 1-1v-9",
+    "M12 15V3m0 0L8.5 6.5M12 3l3.5 3.5",
+  ];
+
+  // Ajouter à l'écran d'accueil : un carré aux angles arrondis frappé d'un plus.
+  const ICONE_AJOUTER = [
+    "M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z",
+    "M12 8v8",
+    "M8 12h8",
+  ];
+
+  // Sur iPhone et iPad, aucun navigateur n'a d'API d'installation : ils sont
+  // tous bâtis sur WebKit et passent tous par le menu Partager du système,
+  // Chrome et Firefox comme Safari. Seule la place du bouton change — d'où
+  // cette bannière pour tout iOS, et pas pour le seul Safari.
+  function ouTrouverPartager() {
+    if (!estSafari()) return "dans votre navigateur";
+    return estIPad() ? "en haut de l'écran" : "en bas de l'écran";
+  }
+
+  // `forcee` : demande explicite de l'utilisateur (clic sur le logo). Elle
+  // passe outre le délai de trente jours — refuser la bannière ne doit pas
+  // condamner l'installation à quelqu'un qui la réclame ensuite.
+  function proposerInstallationIOS(forcee) {
+    if (estInstallee() || (!forcee && propositionRecemmentRefusee())) return;
+
+    const texte = document.createElement("span");
+    texte.className = "pwa-ios-steps";
+
+    texte.append("Appuyez sur « Partager » ");
+    texte.appendChild(iconeIOS(ICONE_PARTAGER));
+    texte.append(` ${ouTrouverPartager()}, puis sur « Ajouter à l'écran d'accueil » `);
+    texte.appendChild(iconeIOS(ICONE_AJOUTER));
+    texte.append(".");
 
     afficherBanniere({
       variante: "install",
@@ -239,7 +269,7 @@
     });
   }
 
-  if (estIOS() && estSafari() && !estInstallee()) {
+  if (estIOS() && !estInstallee()) {
     setTimeout(() => proposerInstallationIOS(false), DELAI_AVANT_PROPOSITION_MS);
   }
 
@@ -267,8 +297,9 @@
       return;
     }
 
-    // Safari sur iPhone et iPad : aucune API, seulement le menu Partager.
-    if (estIOS() && estSafari()) {
+    // iPhone et iPad, quel que soit le navigateur : aucune API, seulement le
+    // menu Partager.
+    if (estIOS()) {
       proposerInstallationIOS(true);
       return;
     }
