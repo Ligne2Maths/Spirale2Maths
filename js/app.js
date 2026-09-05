@@ -1780,24 +1780,41 @@ function renderSFCard(acronyme, sf) {
 
       const img = document.createElement("img");
       img.alt = "";
-      img.onerror = () => {
-        img.onerror = null;
-        // Repli quand maxresdefault n'existe pas (fréquent sur les vidéos
-        // anciennes). Pour une vidéo 4/3, mqdefault est une version RECADRÉE en
-        // 16/9 : elle ne correspondrait pas au lecteur, qui affiche lui l'image
-        // entière entre deux bandes noires. On prend alors hqdefault, qui
-        // contient le cadre 4/3 complet, ajusté en "contain" pour reproduire
-        // ces bandes.
+
+      // Chaîne de replis, du plus détaillé au toujours disponible. Deux pièges :
+      //   - quand une vignette n'existe pas, YouTube ne renvoie PAS d'erreur
+      //     mais une image grise de 120x90 : `onerror` ne se déclenche jamais,
+      //     c'est la taille reçue qu'il faut regarder. Sur le catalogue actuel,
+      //     11 vidéos sur 41 n'ont pas de maxresdefault (et souvent pas de
+      //     sddefault non plus) : sans ce test, elles affichaient ce carré gris
+      //     étiré en plein cadre ;
+      //   - seul hqdefault est garanti, mais c'est un cadre 4/3. Pour une vidéo
+      //     4/3 il contient l'image entière : on l'inscrit en "contain", ce qui
+      //     recrée les bandes latérales du lecteur en mode « tv ». Pour une
+      //     vidéo 16/9 il contient l'image entre deux bandes horizontales, que
+      //     le "cover" habituel retire exactement.
+      const VIGNETTES = ["maxresdefault", "sddefault", "hqdefault"];
+      let rang = 0;
+
+      const essayerSuivante = () => {
+        rang++;
+        if (rang >= VIGNETTES.length) return;
+        // hqdefault et sddefault sont des cadres 4/3 : l'ajustement dépend du
+        // format de la vidéo, connu (et mémorisé) par la détection.
         detecterRatio(videoId).then((ratio) => {
-          const large = ratio >= 1.5;
-          img.classList.toggle("est-ajustee", !large);
-          img.src = `https://i.ytimg.com/vi/${videoId}/${large ? "mqdefault" : "hqdefault"}.jpg`;
+          img.classList.toggle("est-ajustee", ratio < 1.5);
+          img.src = `https://i.ytimg.com/vi/${videoId}/${VIGNETTES[rang]}.jpg`;
         });
       };
-      // maxresdefault est toujours un cadre 16/9, quel que soit le format de la
-      // vidéo (une 4/3 y est déjà entre deux bandes noires) : recadré en
-      // "cover", il reproduit exactement ce que montrera le lecteur.
-      img.src = `https://i.ytimg.com/vi/${videoId}/maxresdefault.jpg`;
+
+      img.onerror = essayerSuivante;
+      img.onload = () => {
+        if (img.naturalWidth <= 120) essayerSuivante(); // vignette grise "absente"
+      };
+      // maxresdefault est un cadre 16/9 quel que soit le format de la vidéo
+      // (une 4/3 y est déjà entre deux bandes) : le "cover" par défaut
+      // reproduit alors exactement ce que montrera le lecteur.
+      img.src = `https://i.ytimg.com/vi/${videoId}/${VIGNETTES[0]}.jpg`;
 
       const play = document.createElement("span");
       play.className = "video-thumb-play";
