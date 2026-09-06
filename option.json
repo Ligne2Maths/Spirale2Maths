@@ -5,7 +5,8 @@
       "ordre": 4,
       "fichier": "contenu/Terminale.xlsx",
       "chapitres": {
-        "1": "Suites - Raisonnement par récurrence",
+        "0": "Algorthmie Python",
+		"1": "Suites - Raisonnement par récurrence",
         "2": "Vecteurs, droites et plans de l'espace",
         "3": "Limites de suites",
 		"4": "Loi binomiale",
