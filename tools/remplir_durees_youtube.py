@@ -18,7 +18,7 @@ deux feuilles, les cellules calculables manquantes :
 3. Colonne "Niveau N fin" de la feuille "Liste" (durée en secondes) : pour
    chaque niveau disponible (colonnes "Niveau N YT"), si "Niveau N fin"
    (2 colonnes plus loin : YT, DG, fin) est vide et qu'un ID vidéo YouTube
-   est renseigné, la durée est récupérée via yt-dlp (aucune clé API requise)
+   est renseigné, la durée est récupérée en ligne (aucune clé API requise)
    et écrite en secondes.
 
 Toutes les colonnes sont repérées par leur en-tête (accents/espaces ignorés),
@@ -32,23 +32,44 @@ Pourquoi "Code" avait disparu (rappel) :
     désormais des valeurs figées (pas des formules), donc ce problème ne peut
     plus se reproduire pour "Code" une fois complété.
 
-yt-dlp n'expose pas d'endpoint groupé comme l'API officielle : chaque vidéo
-nécessite sa propre requête. Les IDs sont dédupliqués au préalable pour
-éviter d'interroger deux fois la même vidéo si elle apparaît à plusieurs
-endroits (plusieurs niveaux/SF).
+Comment la durée est récupérée (et pourquoi ça a changé) :
+    Ce script interrogeait yt-dlp, qui passe par l'API "player" de YouTube.
+    Cette API est désormais protégée : sur une IP non authentifiée, elle
+    répond « Sign in to confirm you're not a bot », quel que soit le
+    player_client demandé et même à jour. Or extraire les flux vidéo (ce que
+    fait le player) est très au-delà de notre besoin : on veut une simple
+    durée.
+
+    La durée est donc lue en priorité via l'endpoint de *recherche* d'InnerTube
+    (https://www.youtube.com/youtubei/v1/search) : une requête JSON légère,
+    sans clé ni cookies, qui n'est pas soumise à cette vérification. On y
+    cherche l'ID vidéo et on lit son "lengthText" ("8:37", "1:02:03"...).
+    Limite : une vidéo non répertoriée (unlisted) ou privée n'apparaît pas
+    dans la recherche — yt-dlp reste alors utilisé en repli, avec au besoin
+    --cookies-from-browser.
+
+Aucun des deux modes n'expose d'endpoint groupé : chaque vidéo nécessite sa
+propre requête. Les IDs sont dédupliqués au préalable pour éviter
+d'interroger deux fois la même vidéo si elle apparaît à plusieurs endroits
+(plusieurs niveaux/SF).
 
 Dépendances :
-    pip install openpyxl yt-dlp
+    pip install openpyxl          (yt-dlp seulement pour le repli, facultatif)
 
 Utilisation :
     python tools/remplir_durees_youtube.py
-    python tools/remplir_durees_youtube.py --dry-run   (liste sans interroger yt-dlp ni écrire)
+    python tools/remplir_durees_youtube.py --dry-run   (liste sans rien interroger ni écrire)
+    python tools/remplir_durees_youtube.py --cookies-from-browser firefox
 """
 
 import argparse
+import json
 import re
 import sys
+import time
 import unicodedata
+import urllib.error
+import urllib.request
 from pathlib import Path
 
 try:
@@ -58,16 +79,30 @@ except ImportError:
     print("    pip install openpyxl")
     sys.exit(1)
 
+# yt-dlp n'est plus que le repli (vidéos non répertoriées) : son absence ne
+# doit pas empêcher le script de tourner.
 try:
     import yt_dlp
 except ImportError:
-    print("Le module 'yt-dlp' est requis. Installez-le avec :")
-    print("    pip install yt-dlp")
-    sys.exit(1)
+    yt_dlp = None
 
 
 NIVEAU_YT_RE = re.compile(r"^\s*niveau\s+(\d+)\s+yt\s*$", re.IGNORECASE)
 YOUTUBE_URL_ID_RE = re.compile(r"(?:/embed/|watch\?v=|youtu\.be/)([^?&/\s]+)")
+
+# Endpoint de recherche InnerTube : même API que la barre de recherche du site,
+# accessible sans clé ni cookies (contrairement à l'API "player" utilisée par
+# yt-dlp, qui déclenche la vérification anti-bot).
+INNERTUBE_SEARCH_URL = "https://www.youtube.com/youtubei/v1/search"
+INNERTUBE_CONTEXT = {
+    "client": {"clientName": "WEB", "clientVersion": "2.20240101.00.00",
+               "hl": "en", "gl": "US"}
+}
+USER_AGENT = (
+    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+    "(KHTML, like Gecko) Chrome/140.0.0.0 Safari/537.36"
+)
+DUREE_TEXTE_RE = re.compile(r"^\d{1,2}(?::\d{2}){1,2}$")
 
 
 def normaliser_entete(texte):
@@ -310,11 +345,89 @@ def collecter_taches_durees(classeurs):
     return taches, ids_uniques
 
 
-def recuperer_durees(video_ids):
-    """Interroge yt-dlp vidéo par vidéo (pas de mode groupé disponible) et
-    renvoie un dict {video_id: duree_en_secondes}."""
+def _parcourir_json(obj):
+    """Parcourt récursivement une structure JSON et renvoie tous ses dicts.
+    Les réponses InnerTube sont profondément imbriquées et leur forme exacte
+    change régulièrement : on cherche donc le renderer par son contenu plutôt
+    que par un chemin fixe."""
+    if isinstance(obj, dict):
+        yield obj
+        for valeur in obj.values():
+            for d in _parcourir_json(valeur):
+                yield d
+    elif isinstance(obj, list):
+        for valeur in obj:
+            for d in _parcourir_json(valeur):
+                yield d
+
+
+def _texte_innertube(noeud):
+    """Extrait le texte d'un nœud InnerTube ({"simpleText": ...} ou
+    {"runs": [{"text": ...}, ...]})."""
+    if not isinstance(noeud, dict):
+        return None
+    if "simpleText" in noeud:
+        return str(noeud["simpleText"]).strip()
+    runs = noeud.get("runs")
+    if isinstance(runs, list):
+        return "".join(str(r.get("text", "")) for r in runs if isinstance(r, dict)).strip()
+    return None
+
+
+def duree_texte_en_secondes(texte):
+    """Convertit "8:37" ou "1:02:03" en nombre de secondes, ou None."""
+    if not texte or not DUREE_TEXTE_RE.match(texte.strip()):
+        return None
+    secondes = 0
+    for partie in texte.strip().split(":"):
+        secondes = secondes * 60 + int(partie)
+    return secondes
+
+
+def duree_via_recherche(video_id, timeout=20):
+    """Récupère la durée d'une vidéo via l'endpoint de recherche InnerTube.
+    Renvoie un nombre de secondes, ou None si la vidéo n'est pas trouvée
+    (non répertoriée, privée, supprimée) ou si la requête échoue."""
+    corps = json.dumps({"context": INNERTUBE_CONTEXT, "query": video_id}).encode("utf-8")
+    requete = urllib.request.Request(
+        INNERTUBE_SEARCH_URL,
+        data=corps,
+        headers={
+            "User-Agent": USER_AGENT,
+            "Content-Type": "application/json",
+            "Origin": "https://www.youtube.com",
+        },
+    )
+    try:
+        with urllib.request.urlopen(requete, timeout=timeout) as reponse:
+            donnees = json.loads(reponse.read().decode("utf-8"))
+    except (urllib.error.URLError, ValueError, OSError) as e:
+        print("Avertissement : recherche YouTube en échec pour {} ({})".format(video_id, e))
+        return None
+
+    # Rechercher l'ID renvoie normalement la vidéo elle-même en tête ; on ne
+    # retient que le renderer dont l'ID correspond exactement, jamais un
+    # simple résultat approchant.
+    for noeud in _parcourir_json(donnees):
+        if noeud.get("videoId") != video_id:
+            continue
+        secondes = duree_texte_en_secondes(_texte_innertube(noeud.get("lengthText")))
+        if secondes is not None:
+            return secondes
+    return None
+
+
+def durees_via_ytdlp(video_ids, cookies_browser=None):
+    """Repli pour les vidéos absentes de la recherche (non répertoriées).
+    Interroge yt-dlp vidéo par vidéo ; peut buter sur la vérification anti-bot
+    de l'API player, d'où l'option --cookies-from-browser."""
     durees = {}
-    ids = sorted(video_ids)
+    if yt_dlp is None:
+        print(
+            "Repli yt-dlp indisponible ({} vidéo(s) non résolue(s)). Installez-le "
+            "avec : pip install yt-dlp".format(len(video_ids))
+        )
+        return durees
 
     ydl_opts = {
         "quiet": True,
@@ -323,15 +436,26 @@ def recuperer_durees(video_ids):
         "noplaylist": True,
         "extract_flat": False,
     }
+    if cookies_browser:
+        ydl_opts["cookiesfrombrowser"] = (cookies_browser, None, None, None)
 
     with yt_dlp.YoutubeDL(ydl_opts) as ydl:
-        for i, video_id in enumerate(ids, start=1):
+        for i, video_id in enumerate(video_ids, start=1):
             url = "https://www.youtube.com/watch?v={}".format(video_id)
-            print("  [{}/{}] {}...".format(i, len(ids), video_id))
+            print("  [repli yt-dlp {}/{}] {}...".format(i, len(video_ids), video_id))
             try:
                 info = ydl.extract_info(url, download=False)
-            except yt_dlp.utils.DownloadError as e:
-                print("Avertissement : vidéo introuvable, privée ou supprimée -> {} ({})".format(video_id, e))
+            except Exception as e:
+                message = str(e)
+                if "not a bot" in message:
+                    print(
+                        "Avertissement : YouTube bloque yt-dlp sur cette connexion "
+                        "(vérification anti-bot) pour {}. Relancez avec "
+                        "--cookies-from-browser firefox (navigateur connecté à "
+                        "YouTube) si cette vidéo est non répertoriée.".format(video_id)
+                    )
+                else:
+                    print("Avertissement : vidéo introuvable, privée ou supprimée -> {} ({})".format(video_id, message))
                 continue
 
             duree = info.get("duration") if info else None
@@ -339,6 +463,34 @@ def recuperer_durees(video_ids):
                 print("Avertissement : durée introuvable pour la vidéo {}".format(video_id))
                 continue
             durees[video_id] = int(duree)
+
+    return durees
+
+
+def recuperer_durees(video_ids, cookies_browser=None):
+    """Renvoie un dict {video_id: duree_en_secondes}. Passe d'abord par la
+    recherche InnerTube (légère, sans clé ni cookies), puis par yt-dlp pour
+    les vidéos qu'elle n'a pas su résoudre."""
+    durees = {}
+    restants = []
+    ids = sorted(video_ids)
+
+    for i, video_id in enumerate(ids, start=1):
+        print("  [{}/{}] {}...".format(i, len(ids), video_id))
+        secondes = duree_via_recherche(video_id)
+        if secondes is None:
+            restants.append(video_id)
+        else:
+            durees[video_id] = secondes
+        if i < len(ids):
+            time.sleep(0.3)  # rester poli avec l'endpoint
+
+    if restants:
+        print(
+            "{} vidéo(s) absente(s) de la recherche (non répertoriée(s) ?), "
+            "repli sur yt-dlp...".format(len(restants))
+        )
+        durees.update(durees_via_ytdlp(restants, cookies_browser))
 
     return durees
 
@@ -405,15 +557,23 @@ def main():
     parser = argparse.ArgumentParser(
         description=(
             "Complète les codes ('Code' sur les 2 feuilles) et les durées "
-            "('Niveau N fin', via yt-dlp, sans clé API) manquants dans les "
-            "tableurs de contenu/."
+            "('Niveau N fin', sans clé API) manquants dans les tableurs de "
+            "contenu/."
         )
     )
     parser.add_argument(
         "--dry-run",
         action="store_true",
-        help="N'interroge pas yt-dlp et n'enregistre rien : liste seulement "
+        help="N'interroge pas YouTube et n'enregistre rien : liste seulement "
         "ce qui manque (codes et durées).",
+    )
+    parser.add_argument(
+        "--cookies-from-browser",
+        dest="cookies_from_browser",
+        metavar="NAVIGATEUR",
+        help="Navigateur dont yt-dlp doit reprendre les cookies (firefox, "
+        "chrome, edge...) pour le repli sur les vidéos non répertoriées. "
+        "Inutile dans le cas courant.",
     )
     parser.add_argument(
         "--contenu-dir",
@@ -450,7 +610,7 @@ def main():
     )
 
     if args.dry_run:
-        print("--dry-run : aucun appel yt-dlp, aucune écriture.")
+        print("--dry-run : aucun appel réseau, aucune écriture.")
         for t in taches_codes:
             print(
                 "  [{}] {} ({}) ligne {} -> {}".format(
@@ -474,8 +634,8 @@ def main():
         print("{} case(s) 'Code'/'Nom' complétée(s).".format(len(taches_codes)))
 
     if ids_uniques:
-        print("Interrogation de yt-dlp (une requête par vidéo)...")
-        durees = recuperer_durees(ids_uniques)
+        print("Récupération des durées (une requête par vidéo)...")
+        durees = recuperer_durees(ids_uniques, args.cookies_from_browser)
         remplis, chemins_durees = appliquer_durees(classeurs, taches_durees, durees)
         chemins_modifies |= chemins_durees
         print("{} durée(s) renseignée(s) sur {} attendue(s).".format(remplis, len(taches_durees)))
