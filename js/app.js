@@ -69,6 +69,9 @@ function loadPersistedGlobalState(availableAcronymes) {
   const savedMode = localStorage.getItem("carnet2maths_mode");
   state.mode = savedMode === "chapitre" || savedMode === "date" ? savedMode : "date";
 
+  // La clé n'est écrite que par un clic sur la bascule (voir saveVideoMode) :
+  // un "ytb" mémorisé est donc un choix délibéré, qu'on respecte. Tous les
+  // autres — dont ceux qui n'ont jamais touché à la bascule — passent en "nopub".
   const savedVideoMode = localStorage.getItem("carnet2maths_videoMode");
   state.videoMode = savedVideoMode === "ytb" ? "ytb" : "nopub"; // "nopub" par défaut
 
@@ -1427,6 +1430,25 @@ function renderContenuDate(container) {
   container.appendChild(clearBtn);
 }
 
+/* ---------- Lecteur YouTube classique (mode "ytb") ---------- */
+
+// YouTube oppose de plus en plus un mur « connectez-vous pour confirmer que
+// vous n'êtes pas un robot » aux lectures qu'il juge suspectes, et un embed
+// anonyme en fait partie. `origin` + `widget_referrer` lui présentent un site
+// identifié, ce qui suffit en général à l'éviter.
+// Attention : ouverte en file://, la page a pour origine la chaîne "null" —
+// annoncer ça au lecteur le fait refuser de démarrer. On ne déclare donc
+// l'origine que sur un vrai serveur.
+function urlYouTube(videoId) {
+  let src = `https://www.youtube.com/embed/${videoId}?rel=0&iv_load_policy=3&playsinline=1`;
+  if (location.protocol === "http:" || location.protocol === "https:") {
+    src +=
+      `&enablejsapi=1&origin=${encodeURIComponent(location.origin)}` +
+      `&widget_referrer=${encodeURIComponent(location.href)}`;
+  }
+  return src;
+}
+
 /* ---------- Format d'image des vidéos (16/9, 4/3, carré, vertical) ---------- */
 
 // Digiview masque l'habillage YouTube en agrandissant son iframe interne d'un
@@ -1748,7 +1770,7 @@ function renderSFCard(acronyme, sf) {
         }
         iframe.allow = "picture-in-picture; autoplay; fullscreen";
       } else {
-        iframe.src = `https://www.youtube-nocookie.com/embed/${videoId}`;
+        iframe.src = urlYouTube(videoId);
         iframe.allow =
           "accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share";
       }
