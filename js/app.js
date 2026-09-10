@@ -427,6 +427,12 @@ async function appliquerNiveaux(choisis) {
   }
 }
 
+// Réaligne la bascule Chapitre / Date sur state.mode, sans animation ni
+// reconstruction des écouteurs. Posée par renderModeToggle(), elle sert au
+// démarrage, qui peut changer de mode une fois le planning connu (voir
+// appliquerModeDeDemarrage).
+let majBasculeMode = () => {};
+
 function renderModeToggle() {
   const container = document.getElementById("mode-toggle");
   const indicator = document.getElementById("mode-indicator");
@@ -443,7 +449,6 @@ function renderModeToggle() {
   }
 
   buttons.forEach((btn) => {
-    btn.classList.toggle("active", btn.dataset.mode === state.mode);
     btn.onclick = () => {
       if (state.mode === btn.dataset.mode) return; // déjà actif
       state.mode = btn.dataset.mode;
@@ -459,7 +464,12 @@ function renderModeToggle() {
     if (actif) moveIndicator(actif, false);
   };
 
-  replacer();
+  majBasculeMode = () => {
+    buttons.forEach((btn) => btn.classList.toggle("active", btn.dataset.mode === state.mode));
+    replacer();
+  };
+
+  majBasculeMode();
   repositionneursIndicateurs.push(replacer);
 }
 
@@ -997,14 +1007,20 @@ function joursPlanifies() {
   return [...isos].sort().map(dateDepuisISO);
 }
 
-/** Index, dans `jours`, du jour servant de repère.
+/** Index, dans `jours`, du premier jour à venir, ou -1 s'il n'y en a aucun.
  *
- *  Le site sert à préparer le cours suivant : le repère est donc le prochain
- *  jour prévu — demain au plus tôt — et non la date du jour. Faute de jour à
- *  venir (fin d'année, planning épuisé), on se rabat sur le dernier connu. */
-function indexJourRepere(jours) {
+ *  Le site sert à préparer le cours suivant : « à venir » commence donc demain,
+ *  et non aujourd'hui — les devoirs du jour étaient à faire pour ce matin. */
+function indexPremierJourAVenir(jours) {
   const demain = toISODate(addDays(startOfToday(), 1));
-  const i = jours.findIndex((j) => toISODate(j) >= demain);
+  return jours.findIndex((j) => toISODate(j) >= demain);
+}
+
+/** Index, dans `jours`, du jour servant de repère : le prochain jour prévu.
+ *  Faute de jour à venir (fin d'année, planning épuisé), on se rabat sur le
+ *  dernier connu. */
+function indexJourRepere(jours) {
+  const i = indexPremierJourAVenir(jours);
   return i === -1 ? jours.length - 1 : i;
 }
 
@@ -2273,6 +2289,24 @@ window.addEventListener("pageshow", (event) => {
 
 /* ---------- Démarrage ---------- */
 
+/** Ouvre sur les chapitres quand le mode Date n'a plus rien à montrer.
+ *
+ *  Le mode Date ouvre sur le prochain jour prévu ; quand le planning des
+ *  niveaux choisis est épuisé — fin d'année, classe dont les dernières dates
+ *  sont derrière nous — il ne lui reste qu'un jour déjà passé à proposer, et
+ *  l'arrivée sur le site ressemble à une erreur. Les chapitres, eux, restent
+ *  utiles en toute saison.
+ *
+ *  Le choix enregistré n'est pas touché : la bascule reste à la main du
+ *  lecteur, et le mode Date revient de lui-même dès qu'une date à venir
+ *  réapparaît au tableur. */
+function appliquerModeDeDemarrage() {
+  if (state.mode !== "date") return;
+  if (indexPremierJourAVenir(joursPlanifies()) !== -1) return;
+  state.mode = "chapitre";
+  majBasculeMode();
+}
+
 async function demarrer(appEl) {
   initNiveauBtn();
   renderModeToggle();
@@ -2290,6 +2324,7 @@ async function demarrer(appEl) {
   }
 
   dernierChargement = Date.now();
+  appliquerModeDeDemarrage();
   render();
 }
 
