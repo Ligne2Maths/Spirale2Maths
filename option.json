@@ -46,7 +46,8 @@
       "ordre": 2,
       "fichier": "contenu/Seconde.xlsx",
       "chapitres": {
-        "1": "Ensembles de Nombre"
+        "1": "Ensembles de Nombre",
+        "2": "Ordre et Intervalle"
       }
     }
   ]
