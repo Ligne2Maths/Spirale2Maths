@@ -38,7 +38,8 @@
       "ordre": 1,
       "fichier": "contenu/Troisieme.xlsx",
       "chapitres": {
-        "1": "Proportionnalité"
+        "1" : "Proportionnalité"
+	"2" : "Théorème de Thales"
       }
     },
 	{
