@@ -31,7 +31,8 @@
         "1": "Suites",
         "2": "Polynomes du 2nd degrès",
         "3": "Dérivation",
-	"4": "Système linéaire"
+	"4": "Système linéaire",
+	"5": "Fonction Exponentielle"
       }
     },
 	{
@@ -40,7 +41,8 @@
       "fichier": "contenu/Troisieme.xlsx",
       "chapitres": {
         "1" : "Proportionnalité",
-	"2" : "Théorème de Thales"
+	"2" : "Théorème de Thales",
+	"3" : "Calcul littéral"
       }
     },
 	{
